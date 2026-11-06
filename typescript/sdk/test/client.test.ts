@@ -6,6 +6,7 @@ import {
   NotificMeApiError,
   NotificMeError,
   UntrustedText,
+  toAskResult,
 } from "../src/index";
 import { fakeServer, sendJson, type RecordedRequest } from "./helpers";
 
@@ -396,5 +397,113 @@ describe("ask()", () => {
     expect(server.requests).toHaveLength(1);
     const r = await handle.wait();
     expect(r.status).toBe("answered");
+  });
+});
+
+describe("members", () => {
+  const user = {
+    id: "019a0000-0000-7000-8000-0000000000u1",
+    email: "ana@acme.com",
+    handle: "ana",
+    display_name: "Ana Lima",
+    locale: "pt-BR",
+    avatar_url: "",
+    created_at: "2026-11-06T12:00:00Z",
+  };
+  const issued = {
+    token: "nm_dlg_abc",
+    token_type: "Bearer",
+    expires_at: "2026-11-06T13:00:00Z",
+    workspace_id: "019a0000-0000-7000-8000-0000000000w1",
+    user,
+    membership_created: true,
+  };
+
+  it("issueToken() posts snake_case and returns camelCase", async () => {
+    server = await fakeServer((_req, res) => sendJson(res, 201, issued));
+    const t = await client(server.url).members.issueToken({
+      email: "ana@acme.com",
+      externalId: "u-123",
+      displayName: "Ana Lima",
+      ttl: "30m",
+    });
+
+    const req = server.requests[0]!;
+    expect(req.method).toBe("POST");
+    expect(req.url).toBe("/v0/member-tokens");
+    expect(req.headers.authorization).toBe("Bearer nm_svc_test");
+    expect(req.json).toEqual({ email: "ana@acme.com", external_id: "u-123", display_name: "Ana Lima", ttl: "30m" });
+    expect(t).toEqual({
+      token: "nm_dlg_abc",
+      tokenType: "Bearer",
+      expiresAt: "2026-11-06T13:00:00Z",
+      workspaceId: "019a0000-0000-7000-8000-0000000000w1",
+      user: {
+        id: "019a0000-0000-7000-8000-0000000000u1",
+        email: "ana@acme.com",
+        handle: "ana",
+        displayName: "Ana Lima",
+        locale: "pt-BR",
+        createdAt: "2026-11-06T12:00:00Z",
+      },
+      membershipCreated: true,
+    });
+  });
+
+  it("issueToken() sends only the e-mail by default and seconds for a numeric ttl", async () => {
+    server = await fakeServer((_req, res) => sendJson(res, 201, { ...issued, membership_created: false }));
+    const n = client(server.url);
+    const t = await n.members.issueToken({ email: "ana@acme.com" });
+    await n.members.issueToken({ email: "ana@acme.com", ttl: 5400 });
+    expect(server.requests[0]!.json).toEqual({ email: "ana@acme.com" });
+    expect(server.requests[1]!.json).toEqual({ email: "ana@acme.com", ttl: "5400s" });
+    expect(t.membershipCreated).toBe(false);
+  });
+
+  it("issueToken() needs an e-mail", async () => {
+    const n = new NotificMe({ token: "t", baseUrl: "http://127.0.0.1:1" });
+    await expect(n.members.issueToken({ email: "" })).rejects.toThrow(/email/);
+  });
+
+  it("issueToken() surfaces workspace_blocked without retrying", async () => {
+    server = await fakeServer((_req, res) =>
+      sendJson(res, 403, { error: { code: "workspace_blocked", message: "blocked" }, request_id: "req-7" }),
+    );
+    const err = (await client(server.url)
+      .members.issueToken({ email: "ana@acme.com" })
+      .catch((e: unknown) => e)) as NotificMeApiError;
+    expect(err).toBeInstanceOf(NotificMeApiError);
+    expect(err).toMatchObject({ status: 403, code: "workspace_blocked", requestId: "req-7" });
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it("issueToken() retries 503", async () => {
+    let calls = 0;
+    server = await fakeServer((_req, res) => {
+      calls++;
+      if (calls === 1) return sendJson(res, 503, { error: { code: "unavailable", message: "x" } });
+      sendJson(res, 201, issued);
+    });
+    const t = await client(server.url).members.issueToken({ email: "ana@acme.com" });
+    expect(t.token).toBe("nm_dlg_abc");
+    expect(server.requests).toHaveLength(2);
+  });
+
+  it("revokeTokens() posts the e-mail and returns the count", async () => {
+    server = await fakeServer((_req, res) => sendJson(res, 200, { revoked: 2 }));
+    const r = await client(server.url).members.revokeTokens({ email: "ana@acme.com" });
+    expect(r).toEqual({ revoked: 2 });
+    const req = server.requests[0]!;
+    expect(req.method).toBe("POST");
+    expect(req.url).toBe("/v0/member-tokens/revoke");
+    expect(req.json).toEqual({ email: "ana@acme.com" });
+  });
+
+  it("reads answers given in your own app (authMethod delegated)", () => {
+    const r = toAskResult({
+      ...reply,
+      answered_by: { identity: "ana@acme.com", device_id: "dlg-1", level_used: 1, auth_method: "delegated" },
+    });
+    expect(r.answeredBy).toEqual({ identity: "ana@acme.com", deviceId: "dlg-1", levelUsed: 1, authMethod: "delegated" });
   });
 });

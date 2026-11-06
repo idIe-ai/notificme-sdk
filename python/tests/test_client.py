@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -11,11 +11,15 @@ from notificme import (
     AskClosedError,
     AskPendingError,
     AsyncNotificMe,
+    MemberToken,
+    MemberUser,
     NotificMe,
     NotificMeApiError,
     NotificMeError,
+    RevokedTokens,
     UntrustedText,
     VoiceAnswer,
+    to_ask_result,
 )
 
 from .conftest import FakeServer
@@ -284,3 +288,117 @@ def test_async_client(server: FakeServer) -> None:
 
     asyncio.run(run())
     assert len(server.requests) == 6
+
+
+ISSUED = {
+    "token": "nm_dlg_abc",
+    "token_type": "Bearer",
+    "expires_at": "2026-11-06T13:00:00Z",
+    "workspace_id": "ws-1",
+    "user": {
+        "id": "user-1",
+        "email": "ana@acme.com",
+        "handle": "ana",
+        "display_name": "Ana Lima",
+        "locale": "pt-BR",
+        "avatar_url": "",
+        "created_at": "2026-11-06T12:00:00Z",
+    },
+    "membership_created": True,
+}
+
+
+def test_issue_member_token(client: NotificMe, server: FakeServer) -> None:
+    server.reply(201, ISSUED)
+    t = client.members.issue_token(
+        email="ana@acme.com", external_id="u-123", display_name="Ana Lima", ttl="30m"
+    )
+    req = server.requests[0]
+    assert req.method == "POST" and req.url == "https://api.test/v0/member-tokens"
+    assert req.headers["authorization"] == "Bearer nm_svc_test"
+    assert server.json(0) == {
+        "email": "ana@acme.com",
+        "external_id": "u-123",
+        "display_name": "Ana Lima",
+        "ttl": "30m",
+    }
+    assert t == MemberToken(
+        token="nm_dlg_abc",
+        token_type="Bearer",
+        expires_at="2026-11-06T13:00:00Z",
+        workspace_id="ws-1",
+        user=MemberUser(
+            id="user-1",
+            email="ana@acme.com",
+            handle="ana",
+            display_name="Ana Lima",
+            locale="pt-BR",
+            created_at="2026-11-06T12:00:00Z",
+        ),
+        membership_created=True,
+    )
+
+
+def test_issue_member_token_defaults_and_ttl(client: NotificMe, server: FakeServer) -> None:
+    server.reply(201, dict(ISSUED, membership_created=False))
+    server.reply(201, ISSUED)
+    t = client.members.issue_token("ana@acme.com")
+    client.members.issue_token("ana@acme.com", ttl=timedelta(hours=2))
+    assert server.json(0) == {"email": "ana@acme.com"}
+    assert server.json(1) == {"email": "ana@acme.com", "ttl": "7200s"}
+    assert t.membership_created is False
+    with pytest.raises(TypeError):
+        client.members.issue_token("")
+
+
+def test_issue_member_token_blocked(client: NotificMe, server: FakeServer) -> None:
+    server.reply(403, {"error": {"code": "workspace_blocked", "message": "blocked"}})
+    with pytest.raises(NotificMeApiError) as e:
+        client.members.issue_token("ana@acme.com")
+    assert e.value.status == 403 and e.value.code == "workspace_blocked"
+    assert len(server.requests) == 1
+
+
+def test_revoke_member_tokens(client: NotificMe, server: FakeServer) -> None:
+    server.reply(200, {"revoked": 2})
+    r = client.members.revoke_tokens(email="ana@acme.com")
+    assert r == RevokedTokens(revoked=2)
+    req = server.requests[0]
+    assert req.method == "POST" and req.url == "https://api.test/v0/member-tokens/revoke"
+    assert server.json(0) == {"email": "ana@acme.com"}
+    with pytest.raises(TypeError):
+        client.members.revoke_tokens("")
+
+
+def test_async_members(server: FakeServer) -> None:
+    async def run() -> None:
+        async with AsyncNotificMe(
+            "t",
+            base_url="https://api.test",
+            retry_base_delay=0,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(server)),
+        ) as c:
+            server.reply(503, {})
+            server.reply(201, ISSUED)
+            t = await c.members.issue_token("ana@acme.com", ttl="1h")
+            assert t.token == "nm_dlg_abc" and t.user.display_name == "Ana Lima"
+            server.reply(200, {"revoked": 1})
+            assert (await c.members.revoke_tokens("ana@acme.com")).revoked == 1
+
+    asyncio.run(run())
+    assert len(server.requests) == 3
+    assert server.json(1) == {"email": "ana@acme.com", "ttl": "1h"}
+
+
+def test_delegated_auth_method() -> None:
+    reply = dict(
+        REPLY,
+        answered_by={
+            "identity": "ana@acme.com",
+            "device_id": "dlg-1",
+            "level_used": 1,
+            "auth_method": "delegated",
+        },
+    )
+    r = to_ask_result(reply)
+    assert r.answered_by is not None and r.answered_by.auth_method == "delegated"

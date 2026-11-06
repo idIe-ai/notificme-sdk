@@ -1,0 +1,44 @@
+{
+  "version": "0",
+  "source": "finance-bot",
+  "type": "report.weekly",
+  "severity": "medium",
+  "occurred_at": "2026-11-06T09:00:00-03:00",
+  "payload": { "week": "2026-W45" },
+  "content": {
+    "summary": "Weekly revenue: R$ 182k (+18%), 3 refunds waiting",
+    "card": {
+      "version": "0",
+      "title": "Weekly report",
+      "theme": { "accent": "#FF6A00" },
+      "blocks": [
+        { "type": "text", "text": "Revenue grew **18%** over last week. Three refunds are waiting for approval." },
+        { "type": "metric", "label": "Revenue", "value": 182400, "unit": "BRL", "delta": "+18%" },
+        { "type": "metric", "label": "Status", "value": "Healthy" },
+        { "type": "chart", "kind": "line", "x": ["Mon", "Tue", "Wed", "Thu", "Fri"], "series": [
+          { "name": "This week", "values": [31, 34, 38, 36, 43] },
+          { "name": "Last week", "values": [28, 30, 31, 33, 32] }
+        ] },
+        { "type": "chart", "kind": "bar", "x": ["North", "South", "East"], "series": [
+          { "name": "Orders", "values": [120, 95, 140] }
+        ] },
+        { "type": "table", "columns": ["Customer", "Amount", "Note"], "rows": [
+          ["Acme", 1200, "Duplicate charge"],
+          ["Globex", 340.5, null],
+          ["Initech", 89, "Late delivery"]
+        ] },
+        { "type": "list", "items": [
+          { "text": "Payroll closes on Friday", "icon": "calendar" },
+          { "text": "New supplier contract signed" }
+        ] },
+        { "type": "image", "src": "https://raw.githubusercontent.com/idIe-ai/notificme-sdk/main/.github/assets/lockup.svg", "alt": "notific.me" },
+        { "type": "progress", "value": 0.65 },
+        { "type": "progress", "steps": ["Collected", "Reviewed", "Approved", "Paid"], "current": 1 },
+        { "type": "buttons", "buttons": [
+          { "label": "Open dashboard", "url": "https://example.com/finance" },
+          { "label": "Export CSV", "action": "finance.export" }
+        ] }
+      ]
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # @notificme/sdk
 
-Official TypeScript SDK for [notific.me](https://notific.me). It sends events, keeps live cards up to date, asks people for decisions and waits for the answer, and verifies the signed webhooks the server sends you.
+Official TypeScript SDK for [notific.me](https://notific.me). It sends events, keeps live cards up to date, asks people for decisions and waits for the answer, issues person tokens so your own app can show a person's inbox, and verifies the signed webhooks the server sends you.
 
 - Works on Node.js 18+, Bun, Deno, Cloudflare Workers and browsers.
 - Ships ESM and CommonJS with full type definitions.
@@ -135,7 +135,43 @@ const handle = await notific.createAsk({
 // handle.id, handle.status === "open"; handle.wait() would long-poll instead.
 ```
 
-The server then sends the signed reply to `callbackUrl` with the `reply` topic. See the next section.
+The server then sends the signed reply to `callbackUrl` with the `reply` topic. See [Verifying webhooks](#verifying-webhooks).
+
+## Person tokens for your own app
+
+Your people may live in your own system (intranet, ERP, help desk) and never open notific.me. With a person token, your app shows their notific.me inbox and lets them answer decisions inside your own screens:
+
+1. The person signs in to your app the way they always do (your SSO, your login).
+2. Your **backend** asks notific.me for a short-lived token for that person, using your service token.
+3. Your **app** uses that token as `Authorization: Bearer <token>` against the API (inbox, sync, real time and answers), or with the client SDK [`@notificme/client`](../client/) once it is published.
+
+The service token needs the `members:token` scope. It is not part of any preset: tick it yourself when you create the token, and keep that token on your server.
+
+```ts
+// Your backend, after your own login says who the person is.
+app.get("/api/notificme-token", requireLogin, async (req, res) => {
+  const t = await notific.members.issueToken({
+    email: req.user.email,       // becomes a member of your workspace if it is not one yet
+    externalId: req.user.id,     // optional: the person's id in your system
+    displayName: req.user.name,  // optional: used when the account is created now
+    ttl: "1h",                   // optional: default 1h, max 12h ("30m", "2h" or seconds)
+  });
+  // t: { token: "nm_dlg_…", tokenType: "Bearer", expiresAt, workspaceId, user, membershipCreated }
+  res.json({ token: t.token, expiresAt: t.expiresAt });
+});
+
+// When the person leaves the company, cut access right away:
+const { revoked } = await notific.members.revokeTokens({ email: "ana@acme.com" });
+```
+
+What a person token can and cannot do:
+
+- It only sees **your** workspace. Notifications the same person gets from other workspaces never show up in your app.
+- It only consumes: inbox, sync, real time and answers. It cannot send events or ask questions.
+- It answers decisions up to **level 1** inside your app; those answers are recorded with `authMethod: "delegated"`. Level 2 and above need a proof your company cannot forge (passkey, authenticator code or the notific.me app), so the API answers `403 step_up_required` with `details.level`. Level 4 (quorum) always needs the notific.me app.
+- It expires (default 1 hour, at most 12). Your app asks your backend for a new one before `expiresAt`.
+
+`issueToken()` throws `NotificMeApiError` with code `workspace_blocked` (403) when the person blocked your workspace, and `forbidden` when the service token lacks the `members:token` scope.
 
 ## Verifying webhooks
 

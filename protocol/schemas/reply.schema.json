@@ -37,7 +37,10 @@
         "identity": { "type": "string", "examples": ["jimmy@idie.ai"] },
         "device_id": { "type": "string" },
         "level_used": { "type": "integer", "minimum": 0, "maximum": 4 },
-        "auth_method": { "enum": ["tap", "unlock", "biometric", "device_pin", "app_password", "totp"] }
+        "auth_method": {
+          "enum": ["tap", "unlock", "biometric", "device_pin", "app_password", "totp", "delegated"],
+          "description": "How the human proved it was them. \"delegated\": answered (level 0-1) inside the company's own system, with a person token issued by the company's backend (the company authenticated the person, not notific.me)."
+        }
       }
     },
     "answered_at": { "type": "string", "format": "date-time" },

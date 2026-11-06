@@ -16,6 +16,8 @@ from .types import (
     AnsweredBy,
     AskInfo,
     AskResult,
+    MemberToken,
+    MemberUser,
     ReplySignature,
     SendResult,
     VoiceAnswer,
@@ -200,6 +202,39 @@ def ask_info_from_wire(v: Mapping[str, Any]) -> AskInfo:
         content_hash=v.get("content_hash"),
         poll_url=v.get("poll_url"),
         reply=v.get("reply"),
+    )
+
+
+def member_token_to_wire(
+    *,
+    email: str,
+    external_id: Optional[str] = None,
+    display_name: Optional[str] = None,
+    ttl: Optional[Duration] = None,
+) -> Dict[str, Any]:
+    """``issue_token()`` arguments → ``POST /v0/member-tokens`` body."""
+    return compact(
+        {"email": email, "external_id": external_id, "display_name": display_name, "ttl": duration(ttl)}
+    )
+
+
+def member_token_from_wire(r: Mapping[str, Any]) -> MemberToken:
+    u = r.get("user") or {}
+    return MemberToken(
+        token=r["token"],
+        token_type=r.get("token_type", "Bearer"),
+        expires_at=r.get("expires_at", ""),
+        workspace_id=r.get("workspace_id", ""),
+        user=MemberUser(
+            id=u.get("id", ""),
+            email=u.get("email", ""),
+            handle=u.get("handle", ""),
+            display_name=u.get("display_name", ""),
+            locale=u.get("locale", ""),
+            created_at=u.get("created_at", ""),
+            avatar_url=u.get("avatar_url") or None,
+        ),
+        membership_created=bool(r.get("membership_created", False)),
     )
 
 

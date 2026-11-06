@@ -2,7 +2,8 @@
  * @notificme/sdk: official TypeScript SDK for notific.me.
  *
  * - `new NotificMe({ token })` client: `send()`, `update()` (live cards),
- *   `ask()` / `createAsk()` / `waitForReply()` (human decisions);
+ *   `ask()` / `createAsk()` / `waitForReply()` (human decisions),
+ *   `members.issueToken()` / `members.revokeTokens()` (person tokens for your own app);
  * - `verifyWebhook()` / `receiveWebhook()` for signed webhooks, plus helpers
  *   for Express, Fastify and Hono;
  * - `UntrustedText` for free text typed by humans.
@@ -10,6 +11,7 @@
 
 export { NotificMe, DEFAULT_BASE_URL } from "./client";
 export type { NotificMeOptions, AskHandle } from "./client";
+export type { Members } from "./members";
 export {
   NotificMeError,
   NotificMeApiError,

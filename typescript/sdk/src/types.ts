@@ -260,12 +260,18 @@ export interface AnswerDetail {
   audioRef?: string;
 }
 
+/**
+ * How the person confirmed the answer. `delegated`: inside your own app with a
+ * person token (`notific.members.issueToken()`), levels 0 and 1 only.
+ */
+export type AuthMethod = "tap" | "unlock" | "biometric" | "device_pin" | "app_password" | "totp" | "delegated";
+
 export interface AnsweredBy {
   /** E-mail or handle of who answered. */
   identity: string;
   deviceId: string;
   levelUsed: Level;
-  authMethod?: "tap" | "unlock" | "biometric" | "device_pin" | "app_password" | "totp";
+  authMethod?: AuthMethod;
 }
 
 export interface ReplySignature {
@@ -358,6 +364,65 @@ export interface AskOptions extends RequestOptions {
    * Default: no limit (the question set's own `timeout` ends the wait).
    */
   maxWaitMs?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Person tokens (your own app shows a person's inbox)
+// ---------------------------------------------------------------------------
+
+/** Lifetime of a person token: `"30m"`, `"1h"`, `"12h"`… or a number of seconds. */
+export type MemberTokenTtl = `${number}${"s" | "m" | "h"}` | number;
+
+/** Input of `notific.members.issueToken()`. */
+export interface IssueMemberTokenInput {
+  /** E-mail of the person. They become a member of your workspace when they are not one yet. */
+  email: string;
+  /** The person's id in your own system. */
+  externalId?: string;
+  /** Name used when the account or the membership is created now. */
+  displayName?: string;
+  /** Default 1 hour, max 12 hours. */
+  ttl?: MemberTokenTtl;
+}
+
+/** A notific.me account. */
+export interface MemberUser {
+  id: string;
+  email: string;
+  /** `@handle` without the `@`. */
+  handle: string;
+  displayName: string;
+  /** `en`, `pt-BR` or `es`. */
+  locale: string;
+  /** API path of the profile photo, when there is one. */
+  avatarUrl?: string;
+  createdAt: string;
+}
+
+/** Result of `notific.members.issueToken()`. Hand `token` to your own app, never to anyone else. */
+export interface MemberToken {
+  /** Person token (`nm_dlg_…`), sent as `Authorization: Bearer <token>`. */
+  token: string;
+  tokenType: "Bearer";
+  /** RFC 3339. Issue a new token before it expires. */
+  expiresAt: string;
+  /** The only workspace this token can see (the one of your service token). */
+  workspaceId: string;
+  user: MemberUser;
+  /** `true` when the person became a member of your workspace now. */
+  membershipCreated: boolean;
+}
+
+/** Input of `notific.members.revokeTokens()`. */
+export interface RevokeMemberTokensInput {
+  /** E-mail of the person whose tokens are revoked. */
+  email: string;
+}
+
+/** Result of `notific.members.revokeTokens()`. */
+export interface RevokeMemberTokensResult {
+  /** How many active person tokens were revoked. */
+  revoked: number;
 }
 
 export type AskStatus = "open" | "answered" | "timeout" | "expired" | "cancelled";

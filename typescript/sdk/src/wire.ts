@@ -4,7 +4,7 @@
  * mapped one by one instead of converting every key blindly.
  */
 
-import type { AskView, EventAccepted, Reply, ReplyAnswer } from "./api";
+import type { AskView, EventAccepted, MemberTokenResponse, Reply, ReplyAnswer, WireUser } from "./api";
 import { toSnake } from "./case";
 import type {
   AnswerDetail,
@@ -14,7 +14,10 @@ import type {
   Card,
   Duration,
   EventInput,
+  IssueMemberTokenInput,
   JsonValue,
+  MemberToken,
+  MemberUser,
   Question,
   SendResult,
   VoiceAnswer,
@@ -141,6 +144,39 @@ export function askInfoFromWire(v: AskView): AskInfo {
     contentHash: v.content_hash,
     pollUrl: v.poll_url,
   }) as AskInfo;
+}
+
+/** IssueMemberTokenInput → `POST /v0/member-tokens` body. */
+export function memberTokenToWire(i: IssueMemberTokenInput): Record<string, unknown> {
+  return compact({
+    email: i.email,
+    external_id: i.externalId,
+    display_name: i.displayName,
+    ttl: duration(i.ttl),
+  });
+}
+
+function userFromWire(u: WireUser): MemberUser {
+  return compact({
+    id: u.id,
+    email: u.email,
+    handle: u.handle,
+    displayName: u.display_name,
+    locale: u.locale,
+    avatarUrl: u.avatar_url || undefined,
+    createdAt: u.created_at,
+  }) as MemberUser;
+}
+
+export function memberTokenFromWire(r: MemberTokenResponse): MemberToken {
+  return {
+    token: r.token,
+    tokenType: r.token_type,
+    expiresAt: r.expires_at,
+    workspaceId: r.workspace_id,
+    user: userFromWire(r.user),
+    membershipCreated: r.membership_created,
+  };
 }
 
 function answerValue(a: ReplyAnswer, q: Question | undefined): unknown {

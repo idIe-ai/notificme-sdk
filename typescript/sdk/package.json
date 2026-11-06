@@ -1,6 +1,6 @@
 {
   "name": "@notificme/sdk",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Official TypeScript SDK for notific.me: send events, keep live cards up to date, ask humans for decisions and verify signed webhooks.",
   "license": "Apache-2.0",
   "homepage": "https://notific.me",

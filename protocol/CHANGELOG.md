@@ -6,6 +6,8 @@ Every change to the schemas in `protocol/schemas/` is recorded here. While `vers
 
 ### Added
 
+- `reply.answered_by.auth_method` accepts `"delegated"`: a level 0–1 answer given inside the company's own system (intranet, native app) with a person token issued by the company's backend (`POST /v0/member-tokens`). The company authenticated the person, not notific.me; levels 2–3 from that session are recorded as `"totp"`.
+
 - Example `examples/agent-approval.reply.json` (signed reply to the example question set).
 - Example naming convention: `<name>.<schema>.json` (`.event.json`, `.question-set.json`, `.reply.json`, `.card.json`). CI validates each example against the schema named by its suffix (`protocol/validate.py`).
 - Semantic rules enforced by the server on top of JSON Schema: question ids are unique; `on_timeout` and `options`/`input` blocks may only reference existing questions; the effective level is the highest of the set's and each question's; level 3+ is never accepted offline.

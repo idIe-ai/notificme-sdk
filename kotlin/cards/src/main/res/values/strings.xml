@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nm_yes">Yes</string>
+    <string name="nm_no">No</string>
+    <string name="nm_other">Other</string>
+    <string name="nm_other_hint">Type your answer</string>
+    <string name="nm_optional">Optional</string>
+    <string name="nm_answer_hint">Your answer</string>
+    <string name="nm_number_hint">Number</string>
+    <string name="nm_date_pick">Pick a date</string>
+    <string name="nm_date_ok">OK</string>
+    <string name="nm_date_cancel">Cancel</string>
+    <string name="nm_voice_hint">Voice answers aren\'t recorded here yet. Type it instead.</string>
+    <string name="nm_unsupported">This app can\'t show a part of this card (%1$s).</string>
+    <string name="nm_unknown_question">This question type isn\'t supported in this app.</string>
+    <string name="nm_progress_percent">%1$d%%</string>
+    <string name="nm_step_of">Step %1$d of %2$d</string>
+</resources>

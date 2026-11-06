@@ -22,6 +22,9 @@ Severity = Literal["info", "low", "medium", "high", "critical"]
 Retention = Literal["ephemeral", "standard", "regulated"]
 QuestionType = Literal["yesno", "single", "multi", "text", "voice", "number", "date"]
 AskStatus = Literal["open", "answered", "timeout", "expired", "cancelled"]
+#: How the person confirmed the answer. ``delegated``: inside your own app with a
+#: person token (``notific.members.issue_token()``), levels 0 and 1 only.
+AuthMethod = Literal["tap", "unlock", "biometric", "device_pin", "app_password", "totp", "delegated"]
 
 
 class Question(TypedDict):
@@ -130,7 +133,9 @@ class AnsweredBy:
     identity: str
     device_id: str
     level_used: int
-    auth_method: Optional[str] = None
+    #: ``tap``, ``unlock``, ``biometric``, ``device_pin``, ``app_password``, ``totp`` or
+    #: ``delegated`` (see ``AuthMethod``).
+    auth_method: Optional[AuthMethod] = None
 
 
 @dataclass(frozen=True)
@@ -167,6 +172,47 @@ class AskResult:
     answered_at: Optional[str] = None
     content_hash: Optional[str] = None
     signature: Optional[ReplySignature] = None
+
+
+@dataclass(frozen=True)
+class MemberUser:
+    """A notific.me account."""
+
+    id: str
+    email: str
+    #: ``@handle`` without the ``@``.
+    handle: str
+    display_name: str
+    #: ``en``, ``pt-BR`` or ``es``.
+    locale: str
+    created_at: str
+    #: API path of the profile photo, when there is one.
+    avatar_url: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class MemberToken:
+    """Result of ``notific.members.issue_token()``. Hand ``token`` to your own app only."""
+
+    #: Person token (``nm_dlg_…``), sent as ``Authorization: Bearer <token>``.
+    token: str
+    #: Always ``Bearer``.
+    token_type: str
+    #: RFC 3339. Issue a new token before it expires.
+    expires_at: str
+    #: The only workspace this token can see (the one of your service token).
+    workspace_id: str
+    user: MemberUser
+    #: ``True`` when the person became a member of your workspace now.
+    membership_created: bool
+
+
+@dataclass(frozen=True)
+class RevokedTokens:
+    """Result of ``notific.members.revoke_tokens()``."""
+
+    #: How many active person tokens were revoked.
+    revoked: int
 
 
 @dataclass(frozen=True)

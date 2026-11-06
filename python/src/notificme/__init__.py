@@ -1,7 +1,8 @@
 """Official Python SDK for notific.me.
 
 - ``NotificMe`` / ``AsyncNotificMe`` clients: ``send()``, ``update()`` (live cards),
-  ``ask()`` / ``create_ask()`` / ``wait_for_reply()`` (human decisions);
+  ``ask()`` / ``create_ask()`` / ``wait_for_reply()`` (human decisions),
+  ``members.issue_token()`` / ``members.revoke_tokens()`` (person tokens for your own app);
 - ``verify_webhook()`` / ``receive_webhook()`` for signed webhooks;
 - ``UntrustedText`` for free text typed by humans.
 """
@@ -15,15 +16,20 @@ from .errors import (
     NotificMeError,
     WebhookVerificationError,
 )
+from .members import AsyncMembers, Members
 from .types import (
     AnswerDetail,
     AnsweredBy,
     AskHandle,
     AskInfo,
     AskResult,
+    AuthMethod,
     Card,
+    MemberToken,
+    MemberUser,
     Question,
     ReplySignature,
+    RevokedTokens,
     SendResult,
     VerifiedSignature,
     VoiceAnswer,
@@ -57,14 +63,20 @@ __all__ = [
     "AskInfo",
     "AskPendingError",
     "AskResult",
+    "AsyncMembers",
     "AsyncNotificMe",
+    "AuthMethod",
     "Card",
     "KeysUrl",
+    "MemberToken",
+    "MemberUser",
+    "Members",
     "NotificMe",
     "NotificMeApiError",
     "NotificMeError",
     "Question",
     "ReplySignature",
+    "RevokedTokens",
     "SendResult",
     "UntrustedText",
     "VerifiedSignature",

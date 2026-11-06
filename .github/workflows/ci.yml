@@ -78,3 +78,18 @@ jobs:
           pip install build twine
           python -m build
           twine check --strict dist/*
+
+  kotlin:
+    name: kotlin (client, cards, sample app)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kotlin
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v5
+      - run: ./gradlew --no-configuration-cache :client:test :cards:testDebugUnitTest :client-android:assembleRelease :sample:assembleDebug

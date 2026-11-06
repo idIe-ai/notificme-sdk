@@ -1,10 +1,11 @@
 /**
  * Wire (snake_case) shapes of the notific.me HTTP API v0 that the SDK reads.
  * They mirror protocol/schemas/reply.schema.json and the API responses of
- * `POST /v0/events` and `POST|GET /v0/asks`. Internal: not exported.
+ * `POST /v0/events`, `POST|GET /v0/asks` and `POST /v0/member-tokens`.
+ * Internal: not exported.
  */
 
-import type { JsonValue, Level } from "./types";
+import type { AuthMethod, JsonValue, Level } from "./types";
 
 type Uuid = string;
 /** RFC 3339 timestamp, UTC (e.g. `2026-11-04T12:00:00Z`). */
@@ -25,7 +26,7 @@ export interface WireAnsweredBy {
   identity: string;
   device_id: string;
   level_used: Level;
-  auth_method?: "tap" | "unlock" | "biometric" | "device_pin" | "app_password" | "totp";
+  auth_method?: AuthMethod;
 }
 
 export interface WireReplySignature {
@@ -71,4 +72,30 @@ export interface AskView {
   poll_url?: string;
   /** Present when `answered` or `timeout`. */
   reply?: Reply;
+}
+
+/** Account, as in `POST /v0/auth/verify`. */
+export interface WireUser {
+  id: Uuid;
+  email: string;
+  handle: string;
+  display_name: string;
+  locale: string;
+  avatar_url?: string;
+  created_at: Timestamp;
+}
+
+/** `POST /v0/member-tokens` → 201. */
+export interface MemberTokenResponse {
+  token: string;
+  token_type: "Bearer";
+  expires_at: Timestamp;
+  workspace_id: Uuid;
+  user: WireUser;
+  membership_created: boolean;
+}
+
+/** `POST /v0/member-tokens/revoke` → 200. */
+export interface MemberTokensRevokeResponse {
+  revoked: number;
 }

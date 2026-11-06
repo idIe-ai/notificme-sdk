@@ -16,6 +16,7 @@ import httpx
 from ._http import AsyncHttp, HttpConfig, SyncHttp
 from ._version import __version__
 from .errors import AskClosedError, AskPendingError, NotificMeError
+from .members import AsyncMembers, Members
 from .types import AskHandle, AskInfo, AskResult, SendResult, VerifiedSignature, Webhook
 from .webhook import (
     DEFAULT_TOLERANCE_SECONDS,
@@ -258,6 +259,9 @@ class NotificMe(_Base):
             token, base_url, source, timeout, max_retries, retry_base_delay, retry_max_delay, user_agent
         )
         self._http = SyncHttp(self._cfg, http_client)
+        #: Person tokens for your own app: ``issue_token()`` and ``revoke_tokens()``.
+        #: Needs the ``members:token`` scope.
+        self.members = Members(self._http)
 
     def close(self) -> None:
         self._http.close()
@@ -451,6 +455,8 @@ class AsyncNotificMe(_Base):
             token, base_url, source, timeout, max_retries, retry_base_delay, retry_max_delay, user_agent
         )
         self._http = AsyncHttp(self._cfg, http_client)
+        #: Person tokens for your own app (``await notific.members.issue_token(...)``).
+        self.members = AsyncMembers(self._http)
 
     async def aclose(self) -> None:
         await self._http.aclose()

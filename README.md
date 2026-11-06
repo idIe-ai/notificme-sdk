@@ -233,7 +233,7 @@ Want your users to get notifications and decisions **under your own brand**? not
 
 - **Your app, your brand:** a build of the official app with your name, icon, colors and server, using your own push keys.
 - **Your infrastructure:** a dedicated instance managed by us, or self-hosted on your servers, with the same SDKs and protocol.
-- **Inside your product:** the inbox and decisions shown in your own app with the client SDK, signed in through your single sign-on *(coming soon)*.
+- **Inside your product:** the inbox and decisions shown in your own app with the client SDK ([Kotlin/Android](kotlin/) today, browser soon). Your backend issues a short-lived person token for whoever signed in through your single sign-on (`notific.members.issueToken()`).
 
 Each agreement sets the brand, the deployment model and data retention. [Talk to us](https://notific.me) to set it up.
 
@@ -245,7 +245,8 @@ Each agreement sets the brand, the deployment model and data retention. [Talk to
 | Python | send events, ask, verify webhooks | `pip install notificme` | [`python/`](python/) |
 | Protocol (JSON Schemas) | the open contract every SDK follows | | [`protocol/`](protocol/) |
 | Browser client | inbox and decisions inside your own app | *planned* | [`typescript/client/`](typescript/client/) |
-| Kotlin, Swift | native clients | *planned* | [`kotlin/`](kotlin/), [`swift/`](swift/) |
+| Kotlin / Android | inbox and decisions inside your own Android app, Compose card renderer, reference app | *not published yet* | [`kotlin/`](kotlin/) |
+| Swift | iOS client | *planned* | [`swift/`](swift/) |
 
 Every SDK follows the schemas in [`protocol/`](protocol/) and is tested against the same signed webhook vector in [`protocol/test-vectors/`](protocol/test-vectors/).
 
@@ -261,7 +262,7 @@ typescript/
   sdk/             @notificme/sdk: send events, ask, verify webhooks
   client/          @notificme/client: inbox and decisions in the browser (planned)
 python/            notificme: send events, ask, verify webhooks
-kotlin/            Android client (planned)
+kotlin/            client (Kotlin), client-android, cards (Compose) and the sample app
 swift/             iOS client (planned)
 ```
 
@@ -273,6 +274,9 @@ cd typescript/sdk && npm ci && npm test
 
 # Python
 cd python && python -m venv .venv && .venv/bin/pip install -e ".[dev]" && .venv/bin/pytest
+
+# Kotlin / Android (JDK 17+, Android SDK)
+cd kotlin && ./gradlew :client:test :cards:testDebugUnitTest :sample:assembleDebug
 
 # Protocol
 pip install jsonschema referencing && python protocol/validate.py

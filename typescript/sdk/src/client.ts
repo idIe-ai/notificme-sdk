@@ -1,6 +1,7 @@
 import type { AskView, EventAccepted } from "./api";
 import { AskClosedError, AskPendingError, NotificMeError } from "./errors";
 import { type FetchLike, type HttpConfig, request } from "./http";
+import { Members } from "./members";
 import type {
   AskInfo,
   AskInput,
@@ -83,6 +84,11 @@ interface LiveCardBase {
 export class NotificMe {
   readonly baseUrl: string;
   readonly source: string | undefined;
+  /**
+   * Person tokens for your own app: `issueToken()` and `revokeTokens()`.
+   * Needs the `members:token` scope.
+   */
+  readonly members: Members;
   private readonly http: HttpConfig;
   /** Last event sent per live card, so `update()` can fill required fields. */
   private readonly liveCards = new Map<string, LiveCardBase>();
@@ -107,6 +113,7 @@ export class NotificMe {
       retryMaxDelayMs: options.retryMaxDelayMs ?? 10_000,
       userAgent: isNode ? `notificme-sdk-ts/${VERSION}${options.userAgent ? ` ${options.userAgent}` : ""}` : undefined,
     };
+    this.members = new Members(this.http);
   }
 
   /** URL of the server's public keys, used to verify webhooks. */

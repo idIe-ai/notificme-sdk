@@ -2,6 +2,9 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   type AskResult,
+  type AuthMethod,
+  type MemberToken,
+  type NotificMe,
   type UntrustedText,
   type VoiceAnswer,
   toAskResult,
@@ -36,6 +39,14 @@ describe("types", () => {
     } else {
       expectTypeOf(r.answers.ok).toEqualTypeOf<boolean | undefined>();
     }
+    expectTypeOf(r.answeredBy?.authMethod).toEqualTypeOf<AuthMethod | undefined>();
+    expectTypeOf<"delegated">().toExtend<AuthMethod>();
+  });
+
+  it("types person tokens", () => {
+    expectTypeOf<NotificMe["members"]["issueToken"]>().returns.resolves.toEqualTypeOf<MemberToken>();
+    expectTypeOf<NotificMe["members"]["revokeTokens"]>().returns.resolves.toEqualTypeOf<{ revoked: number }>();
+    expectTypeOf<NotificMe["members"]["issueToken"]>().parameter(0).toHaveProperty("ttl");
   });
 });
 

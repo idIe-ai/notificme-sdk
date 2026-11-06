@@ -1,0 +1,29 @@
+{
+  "version": "0",
+  "to": ["ana", "#finance"],
+  "title": "Approve the purchase of 12 laptops?",
+  "context": "Procurement asks for 12 laptops for the new support team. The budget line has R$ 90k left.",
+  "questions": [
+    { "id": "approve", "type": "yesno", "text": "Approve this purchase?" },
+    { "id": "supplier", "type": "single", "text": "Which supplier?", "options": ["Dell", "Lenovo", "Apple"], "allow_other": true },
+    { "id": "extras", "type": "multi", "text": "Include extras", "options": ["Docking station", "Second monitor", "Headset"], "optional": true },
+    { "id": "quantity", "type": "number", "text": "How many units?" },
+    { "id": "deliver_by", "type": "date", "text": "Deliver by" },
+    { "id": "note", "type": "text", "text": "Note for procurement", "optional": true },
+    { "id": "voice_note", "type": "voice", "text": "Voice note", "optional": true }
+  ],
+  "level": 1,
+  "offline": "allowed",
+  "timeout": "2d",
+  "on_timeout": { "approve": false },
+  "card": {
+    "title": "Purchase request #4821",
+    "blocks": [
+      { "type": "metric", "label": "Estimated total", "value": 86400, "unit": "BRL" },
+      { "type": "table", "columns": ["Item", "Qty", "Unit price"], "rows": [["Laptop 14\"", 12, 7200]] },
+      { "type": "options", "question_id": "approve" },
+      { "type": "options", "question_id": "supplier" },
+      { "type": "input", "question_id": "quantity" }
+    ]
+  }
+}
