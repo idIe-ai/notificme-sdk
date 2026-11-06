@@ -6,8 +6,9 @@ Thumbs.db
 
 # Node
 node_modules/
-typescript/dist/
-typescript/LICENSE
+typescript/*/dist/
+typescript/*/dist-pack/
+typescript/*/LICENSE
 *.tgz
 
 # Python

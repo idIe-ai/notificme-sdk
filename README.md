@@ -2,13 +2,27 @@
 
 Official SDKs and open protocol for [notific.me](https://notific.me): send events, keep live cards up to date, ask humans for decisions and verify the signed webhooks the server sends you.
 
-| Package | Install | Source |
-| --- | --- | --- |
-| TypeScript / JavaScript | `npm install @notificme/sdk` | [`typescript/`](typescript/) |
-| Python | `pip install notificme` | [`python/`](python/) |
-| Protocol (JSON Schemas) | | [`protocol/`](protocol/) |
+| Package | Role | Install | Source |
+| --- | --- | --- | --- |
+| TypeScript / JavaScript | send | `npm install @notificme/sdk` | [`typescript/sdk/`](typescript/sdk/) |
+| Python | send | `pip install notificme` | [`python/`](python/) |
+| Protocol (JSON Schemas) | | | [`protocol/`](protocol/) |
 
 Every SDK follows the schemas in [`protocol/`](protocol/) and is tested against the same signed webhook vector in [`protocol/test-vectors/`](protocol/test-vectors/).
+
+## Layout
+
+The repository is organized by language. Each language has one toolchain and may hold two packages: one to **send** (server side, with a service token) and one **client** to show the inbox and answer decisions inside your own app (with a short-lived person token).
+
+```
+protocol/          JSON Schemas, examples and shared test vectors
+typescript/
+  sdk/             @notificme/sdk: send events, ask, verify webhooks
+  client/          @notificme/client: inbox and decisions in the browser (planned)
+python/            notificme: send events, ask, verify webhooks
+kotlin/            Android client (planned)
+swift/             iOS client (planned)
+```
 
 ## Quick look
 
@@ -30,7 +44,7 @@ notific.send("invoice.failed", severity="high", summary="Invoice #42 failed")
 
 ```sh
 # TypeScript
-cd typescript && npm ci && npm test
+cd typescript/sdk && npm ci && npm test
 
 # Python
 cd python && python -m venv .venv && .venv/bin/pip install -e ".[dev]" && .venv/bin/pytest
@@ -39,13 +53,17 @@ cd python && python -m venv .venv && .venv/bin/pip install -e ".[dev]" && .venv/
 pip install jsonschema referencing && python protocol/validate.py
 ```
 
+## Contributing
+
+This repository is published from the notific.me monorepo, where the SDKs are developed together with the server. Issues and pull requests are welcome here: a maintainer applies accepted changes upstream, and they come back in the next sync.
+
 ## Releasing
 
 Each SDK is versioned and released on its own, from a tag. GitHub Actions publishes with Trusted Publishing (OIDC), so the repository holds no registry tokens.
 
 | SDK | Bump the version in | Tag | Workflow |
 | --- | --- | --- | --- |
-| TypeScript | `typescript/package.json` and `typescript/src/version.ts` | `ts-v0.2.0` | [`publish-npm.yml`](.github/workflows/publish-npm.yml) |
+| TypeScript | `typescript/sdk/package.json` and `typescript/sdk/src/version.ts` | `ts-v0.2.0` | [`publish-npm.yml`](.github/workflows/publish-npm.yml) |
 | Python | `python/src/notificme/_version.py` | `py-v0.2.0` | [`publish-pypi.yml`](.github/workflows/publish-pypi.yml) |
 
 ```sh
