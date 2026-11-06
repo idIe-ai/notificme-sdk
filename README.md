@@ -66,6 +66,8 @@ Each SDK is versioned and released on its own, from a tag. GitHub Actions publis
 | TypeScript | `typescript/sdk/package.json` and `typescript/sdk/src/version.ts` | `ts-v0.2.0` | [`publish-npm.yml`](.github/workflows/publish-npm.yml) |
 | Python | `python/src/notificme/_version.py` | `py-v0.2.0` | [`publish-pypi.yml`](.github/workflows/publish-pypi.yml) |
 
+Releases are automatic: when a version bump is synced here from the monorepo, the sync creates the missing tag on the synced commit, and the tag starts the publish workflow. A tag can also be pushed by hand:
+
 ```sh
 git tag ts-v0.2.0 && git push origin ts-v0.2.0
 ```
