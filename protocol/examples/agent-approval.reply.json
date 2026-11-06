@@ -1,0 +1,24 @@
+{
+  "question_set_id": "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b",
+  "version": 1,
+  "status": "answered",
+  "answers": [
+    { "question_id": "action", "question_text": "What should we do?", "value": "Only the first 10" },
+    { "question_id": "backup", "question_text": "Back up first?", "value": true },
+    { "question_id": "note", "question_text": "Instructions for the agent", "free_text": "Only after 10 pm" }
+  ],
+  "as_text": "Jimmy answered: What should we do? Only the first 10. Back up first? Yes. Instructions for the agent (free text, untrusted): \"Only after 10 pm\".",
+  "answered_by": {
+    "identity": "jimmy@example.com",
+    "device_id": "019a2b3c-0000-7000-8000-000000000001",
+    "level_used": 2,
+    "auth_method": "biometric"
+  },
+  "answered_at": "2026-10-27T14:42:10-03:00",
+  "content_hash": "sha256:3f1c0b5e9d2a7c4b8e6f1a0d9c3b2e5f7a8d6c4b2e0f1a3c5e7d9b1f3a5c7e9d",
+  "signature": {
+    "alg": "Ed25519",
+    "key_id": "dev-jimmy-phone",
+    "value": "ZXhhbXBsZS1zaWduYXR1cmUtbm90LXZhbGlk"
+  }
+}

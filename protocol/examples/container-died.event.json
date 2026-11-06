@@ -1,0 +1,24 @@
+{
+  "version": "0",
+  "source": "dokploy",
+  "type": "container.die",
+  "severity": "high",
+  "occurred_at": "2026-10-27T14:30:00-03:00",
+  "dedup_key": "vps-01/api-v2",
+  "expires_when": "container.healthy",
+  "payload": { "host": "vps-01", "container": "api-v2", "exit_code": 137 },
+  "content": {
+    "summary": "api-v2 died on vps-01 (exit 137, likely out of memory)",
+    "card": {
+      "title": "Container died",
+      "blocks": [
+        { "type": "metric", "label": "Crashes in the last 24h", "value": 3 },
+        { "type": "text", "text": "**api-v2** on **vps-01** exited with code 137." },
+        { "type": "buttons", "buttons": [
+          { "label": "Open Dokploy", "url": "https://dokploy.example.com" },
+          { "label": "Restart", "action": "docker.restart" }
+        ] }
+      ]
+    }
+  }
+}

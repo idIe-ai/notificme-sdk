@@ -1,0 +1,56 @@
+# Publishes notificme to PyPI when a `py-v<version>` tag is pushed.
+#
+# Uses PyPI Trusted Publishing (OIDC): no API token secret. On pypi.org →
+# Your projects → Publishing (or "Add a pending publisher" before the first
+# release), add GitHub with:
+#   owner: idIe-ai   repository: notificme-sdk
+#   workflow name: publish-pypi.yml   environment: pypi
+name: publish-pypi
+
+on:
+  push:
+    tags: ["py-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: ci
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Tag matches the package version
+        run: |
+          tag="${GITHUB_REF_NAME#py-v}"
+          pkg=$(python -c "import re;print(re.search(r'\"(.+)\"', open('src/notificme/_version.py').read())[1])")
+          [ "$tag" = "$pkg" ] || { echo "Tag $GITHUB_REF_NAME does not match _version.py $pkg"; exit 1; }
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: python/dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # OIDC for trusted publishing and attestations
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

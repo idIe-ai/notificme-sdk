@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://notific.me/schemas/v0/question-set.schema.json",
+  "title": "notific.me Question Set",
+  "description": "Question set sent by ask(). The reply comes back as a single signed package.",
+  "type": "object",
+  "required": ["title", "questions"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": "0" },
+    "to": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "title": { "type": "string", "maxLength": 160 },
+    "context": { "type": "string", "maxLength": 4000, "description": "Explanation for the human (why they are being asked)." },
+    "questions": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "$ref": "#/$defs/question" } },
+    "level": { "type": "integer", "minimum": 0, "maximum": 4, "default": 1, "description": "Minimum verification level. The workspace may require more." },
+    "quorum": {
+      "type": "object", "required": ["required"], "additionalProperties": false,
+      "properties": { "required": { "type": "integer", "minimum": 2 } }
+    },
+    "offline": { "enum": ["allowed", "denied"], "default": "allowed" },
+    "timeout": { "type": "string", "pattern": "^[0-9]+(s|m|h|d)$" },
+    "on_timeout": { "type": "object", "description": "Answers applied when nobody answers in time, by question id." },
+    "escalate": { "type": "array", "items": { "type": "string" } },
+    "callback_url": { "type": "string", "format": "uri", "description": "Webhook que recebe a resposta assinada." },
+    "card": { "$ref": "card.schema.json" }
+  },
+  "$defs": {
+    "question": {
+      "type": "object",
+      "required": ["id", "type", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_-]{1,64}$" },
+        "type": { "enum": ["yesno", "single", "multi", "text", "voice", "number", "date"] },
+        "text": { "type": "string", "maxLength": 500 },
+        "options": { "type": "array", "items": { "type": "string" }, "minItems": 2, "maxItems": 12 },
+        "allow_other": { "type": "boolean", "default": false, "description": "Allows free text besides the options." },
+        "optional": { "type": "boolean", "default": false },
+        "level": { "type": "integer", "minimum": 0, "maximum": 4 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "enum": ["single", "multi"] } } },
+          "then": { "required": ["options"] }
+        }
+      ]
+    }
+  }
+}

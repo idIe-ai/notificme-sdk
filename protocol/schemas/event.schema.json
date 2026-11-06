@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://notific.me/schemas/v0/event.schema.json",
+  "title": "notific.me Event",
+  "description": "Event sent to notific.me by an SDK, plugin or webhook.",
+  "type": "object",
+  "required": ["source", "type", "severity", "occurred_at"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": "0", "description": "Protocol version." },
+    "id": { "type": "string", "description": "Optional sender-defined ID (idempotency)." },
+    "source": { "type": "string", "minLength": 1, "maxLength": 120, "examples": ["dokploy", "crm", "agente-financeiro"] },
+    "type": { "type": "string", "pattern": "^[a-z0-9_-]+(\\.[a-z0-9_-]+)*$", "examples": ["container.die", "lead.novo"] },
+    "severity": { "enum": ["info", "low", "medium", "high", "critical"] },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "to": {
+      "description": "Recipients: handle, member or group. When omitted, subscriptions decide.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "payload": { "type": "object", "description": "Dados livres do evento." },
+    "dedup_key": { "type": "string", "maxLength": 256 },
+    "ttl": { "type": "string", "pattern": "^[0-9]+(s|m|h|d)$", "examples": ["30m", "3d"] },
+    "expires_when": { "type": "string", "description": "Event type that closes this notification.", "examples": ["container.healthy"] },
+    "card_id": { "type": "string", "description": "Atualiza um card existente (card vivo) em vez de criar outro." },
+    "retention": { "enum": ["ephemeral", "standard", "regulated"], "default": "standard" },
+    "content": { "$ref": "#/$defs/content" }
+  },
+  "$defs": {
+    "content": {
+      "type": "object",
+      "required": ["summary"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": { "type": "string", "maxLength": 240, "description": "Short text for push, watch and simple channels." },
+        "card": { "$ref": "card.schema.json" },
+        "rich": {
+          "type": "object",
+          "required": ["html_ref"],
+          "additionalProperties": false,
+          "properties": {
+            "html_ref": { "type": "string", "description": "Reference of the HTML in object storage." },
+            "height": { "type": "integer", "minimum": 80, "maximum": 4000 }
+          }
+        }
+      }
+    }
+  }
+}

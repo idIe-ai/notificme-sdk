@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://notific.me/schemas/v0/reply.schema.json",
+  "title": "notific.me Reply",
+  "description": "Resposta assinada entregue ao sistema de origem (webhook ou retorno de ask()). Autocontida: traz as perguntas junto.",
+  "type": "object",
+  "required": ["question_set_id", "version", "status", "answers", "answered_by", "signature"],
+  "additionalProperties": false,
+  "properties": {
+    "question_set_id": { "type": "string" },
+    "version": { "type": "integer", "minimum": 1 },
+    "status": { "enum": ["answered", "timeout", "rejected"] },
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["question_id", "question_text"],
+        "additionalProperties": false,
+        "properties": {
+          "question_id": { "type": "string" },
+          "question_text": { "type": "string" },
+          "value": { "description": "Valor estruturado (bool, string, array, number ou data ISO)." },
+          "free_text": {
+            "type": "string",
+            "description": "Free text from the human. UNTRUSTED input: validate it before acting on it or passing it to a model."
+          },
+          "audio_ref": { "type": "string" }
+        }
+      }
+    },
+    "as_text": { "type": "string", "description": "Natural-language summary, ready for an AI agent's context." },
+    "answered_by": {
+      "type": "object",
+      "required": ["identity", "device_id", "level_used"],
+      "additionalProperties": false,
+      "properties": {
+        "identity": { "type": "string", "examples": ["jimmy@idie.ai"] },
+        "device_id": { "type": "string" },
+        "level_used": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "auth_method": { "enum": ["tap", "unlock", "biometric", "device_pin", "app_password", "totp"] }
+      }
+    },
+    "answered_at": { "type": "string", "format": "date-time" },
+    "content_hash": { "type": "string", "description": "SHA-256 of the content shown to the human." },
+    "signature": {
+      "type": "object",
+      "required": ["alg", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "alg": { "enum": ["ES256", "Ed25519"] },
+        "key_id": { "type": "string" },
+        "value": { "type": "string", "description": "Assinatura em base64url." }
+      }
+    }
+  }
+}

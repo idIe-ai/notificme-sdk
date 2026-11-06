@@ -1,0 +1,17 @@
+{
+  "version": "0",
+  "to": ["jimmy"],
+  "title": "Agent wants to delete 340 duplicate records",
+  "context": "The CRM cleanup agent found 340 contacts duplicated by e-mail.",
+  "questions": [
+    { "id": "action", "type": "single", "text": "What should we do?", "options": ["Approve", "Only the first 10", "Deny"], "allow_other": true },
+    { "id": "backup", "type": "yesno", "text": "Back up first?" },
+    { "id": "note", "type": "text", "text": "Instructions for the agent", "optional": true }
+  ],
+  "level": 2,
+  "offline": "denied",
+  "timeout": "30m",
+  "on_timeout": { "action": "Deny" },
+  "escalate": ["partner@example.com"],
+  "callback_url": "https://crm.example.com/hooks/notificme"
+}

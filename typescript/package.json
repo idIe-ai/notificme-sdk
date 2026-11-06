@@ -1,0 +1,70 @@
+{
+  "name": "@notificme/sdk",
+  "version": "0.1.0",
+  "description": "Official TypeScript SDK for notific.me: send events, keep live cards up to date, ask humans for decisions and verify signed webhooks.",
+  "license": "Apache-2.0",
+  "homepage": "https://notific.me",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/idIe-ai/notificme-sdk.git",
+    "directory": "typescript"
+  },
+  "keywords": [
+    "notific.me",
+    "notifications",
+    "human-in-the-loop",
+    "approval",
+    "webhooks",
+    "sdk"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "vitest run test/e2e.test.ts",
+    "prepack": "node scripts/copy-license.mjs"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.18.0",
+    "express": "^5.1.0",
+    "fastify": "^5.6.0",
+    "hono": "^4.9.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "bugs": {
+    "url": "https://github.com/idIe-ai/notificme-sdk/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

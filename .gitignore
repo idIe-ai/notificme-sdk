@@ -1,0 +1,26 @@
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Node
+node_modules/
+typescript/dist/
+typescript/LICENSE
+*.tgz
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+python/dist/
+python/build/
+*.egg-info/
+
+# Secrets
+.env
+.env.*

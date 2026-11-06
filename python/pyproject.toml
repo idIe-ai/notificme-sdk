@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "notificme"
+dynamic = ["version"]
+description = "Official Python SDK for notific.me: send events, keep live cards up to date, ask humans for decisions and verify signed webhooks."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "IDIE Consulting Technology" }]
+keywords = ["notific.me", "notifications", "human-in-the-loop", "approval", "webhooks", "sdk"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+dependencies = [
+  "httpx>=0.25,<1",
+  "cryptography>=41",
+  "typing_extensions>=4.7; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
+
+[project.urls]
+Homepage = "https://notific.me"
+Source = "https://github.com/idIe-ai/notificme-sdk/tree/main/python"
+Issues = "https://github.com/idIe-ai/notificme-sdk/issues"
+
+[tool.hatch.version]
+path = "src/notificme/_version.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/notificme", "tests", "README.md", "LICENSE"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/notificme"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["UP006", "UP007", "UP035", "UP045", "B008"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src"]
