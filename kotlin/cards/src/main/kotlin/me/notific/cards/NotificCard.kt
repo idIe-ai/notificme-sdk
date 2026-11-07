@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -74,6 +75,8 @@ public fun NotificCard(
     enabled: Boolean = true,
     // Before onButton: a trailing lambda keeps meaning onButton.
     questionExtra: (@Composable (me.notific.client.Question) -> Unit)? = null,
+    // Inside the text fields of the questions (the app's dictation mic).
+    questionFieldAction: (@Composable (me.notific.client.Question) -> Unit)? = null,
     onButton: (CardButton) -> Unit = {},
 ) {
     val accent = card.theme?.accent?.let(::parseColor)
@@ -91,8 +94,8 @@ public fun NotificCard(
                 is Block.Image -> ImageBlock(block)
                 is Block.Progress -> ProgressBlock(block, accent)
                 is Block.Buttons -> ButtonsBlock(block, enabled, onButton)
-                is Block.Options -> answers?.let { s -> s.questions.firstOrNull { it.id == block.questionId }?.let { QuestionView(it, s, enabled = enabled, extra = questionExtra) } }
-                is Block.Input -> answers?.let { s -> s.questions.firstOrNull { it.id == block.questionId }?.let { QuestionView(it, s, enabled = enabled, extra = questionExtra) } }
+                is Block.Options -> answers?.let { s -> s.questions.firstOrNull { it.id == block.questionId }?.let { QuestionView(it, s, enabled = enabled, extra = questionExtra, fieldAction = questionFieldAction) } }
+                is Block.Input -> answers?.let { s -> s.questions.firstOrNull { it.id == block.questionId }?.let { QuestionView(it, s, enabled = enabled, extra = questionExtra, fieldAction = questionFieldAction) } }
                 is Block.Unknown -> Text(
                     stringResource(R.string.nm_unsupported, block.type),
                     style = MaterialTheme.typography.bodySmall,
@@ -131,10 +134,15 @@ private fun MetricBlock(block: Block.Metric) {
             }
             block.delta?.let {
                 Spacer(Modifier.width(10.dp))
+                // Green when it moved the good way: up, or down when lower is better.
+                val up = it.startsWith("+")
+                val down = it.startsWith("-") || it.startsWith("\u2212")
+                val good = if (block.better == "lower") down else up
+                val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                 val color = when {
-                    it.startsWith("+") -> Color(0xFF15803D)
-                    it.startsWith("-") || it.startsWith("−") -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    !up && !down -> MaterialTheme.colorScheme.onSurfaceVariant
+                    good -> if (dark) Color(0xFF4ADE80) else Color(0xFF15803D)
+                    else -> MaterialTheme.colorScheme.error
                 }
                 Text(it, style = MaterialTheme.typography.labelLarge, color = color, modifier = Modifier.padding(bottom = 4.dp))
             }

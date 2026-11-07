@@ -120,6 +120,7 @@ export function askToWire(a: AskInput): Record<string, unknown> {
     context: a.context,
     questions: a.questions.map(questionToWire),
     level: a.level,
+    severity: a.severity,
     quorum: a.quorum !== undefined ? { required: a.quorum } : undefined,
     offline: a.offline,
     timeout: duration(a.timeout),

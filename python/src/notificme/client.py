@@ -335,8 +335,9 @@ class NotificMe(_Base):
         when the question set expires or is cancelled, and ``AskPendingError`` when
         ``max_wait`` (seconds) elapses first.
 
-        ``options``: ``to``, ``context``, ``level``, ``quorum``, ``offline``,
-        ``timeout`` (e.g. ``"30m"``), ``on_timeout``, ``escalate``, ``callback_url``, ``card``.
+        ``options``: ``to``, ``context``, ``level``, ``severity`` (``"critical"`` may take the
+        person's screen), ``quorum``, ``offline``, ``timeout`` (e.g. ``"30m"``), ``on_timeout``,
+        ``escalate``, ``callback_url``, ``card``.
         """
         handle = self.create_ask(
             title, questions, idempotency_key=idempotency_key, request_timeout=request_timeout, **options

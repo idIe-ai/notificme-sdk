@@ -39,6 +39,8 @@ public data class Notification(
     @SerialName("expires_at") val expiresAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("closed_at") val closedAt: String? = null,
+    /** When the person gave "got it" on this (critical) alert, on any of their devices. */
+    @SerialName("acknowledged_at") val acknowledgedAt: String? = null,
 ) {
     /** No delivery of it was read yet. */
     public val unread: Boolean get() = deliveries.isNotEmpty() && deliveries.all { it.readAt == null }

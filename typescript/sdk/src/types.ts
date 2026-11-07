@@ -31,6 +31,8 @@ export interface MetricBlock {
   unit?: string;
   /** e.g. `"+18%"` */
   delta?: string;
+  /** Which way is good: `"higher"` (default) or `"lower"` (a default rate, a response time). */
+  better?: "higher" | "lower";
 }
 export interface ChartBlock {
   type: "chart";
@@ -329,6 +331,11 @@ export interface AskInput<Qs extends readonly Question[] = readonly Question[]> 
   questions: Qs;
   /** Minimum decision level (default 1). The workspace may require more. */
   level?: Level;
+  /**
+   * How urgent it is (default `"high"`). `"critical"`: the person's app may take
+   * the full screen with an alarm until they decide (their choice in the app).
+   */
+  severity?: Severity;
   /** Number of people that must answer (2 or more). */
   quorum?: number;
   /** Whether the app may answer while offline. */

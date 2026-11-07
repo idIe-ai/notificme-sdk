@@ -1,6 +1,9 @@
 package me.notific.cards
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -12,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
@@ -33,6 +38,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -49,8 +56,9 @@ import me.notific.client.QuestionType
 
 /**
  * One question with native controls, bound to [state]. [extra] is drawn
- * under text and voice answers (the official app puts its dictation button
- * there); with it, the "voice is not recorded here" hint is left out.
+ * under text and voice answers; [fieldAction] goes inside their field, at the
+ * bottom right (the official app puts its dictation microphone there). With
+ * either, the "voice is not recorded here" hint is left out.
  */
 @Composable
 public fun QuestionView(
@@ -59,6 +67,7 @@ public fun QuestionView(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     extra: (@Composable (Question) -> Unit)? = null,
+    fieldAction: (@Composable (Question) -> Unit)? = null,
 ) {
     val draft = state[question.id]
     Column(modifier.fillMaxWidth().testTag("question-${question.id}"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -76,35 +85,38 @@ public fun QuestionView(
             QuestionType.YesNo -> YesNo(question, state, enabled)
             QuestionType.Single -> Single(question, state, enabled)
             QuestionType.Multi -> Multi(question, state, enabled)
-            QuestionType.Text -> OutlinedTextField(
+            QuestionType.Text -> SoftField(
                 value = draft.text,
-                onValueChange = { v -> state.update(question.id) { it.copy(text = v) } },
+                onChange = { v -> state.update(question.id) { it.copy(text = v) } },
                 enabled = enabled,
-                placeholder = { Text(stringResource(R.string.nm_answer_hint)) },
-                minLines = 2,
-                modifier = Modifier.fillMaxWidth().testTag("input-${question.id}"),
+                placeholder = stringResource(R.string.nm_answer_hint),
+                tag = "input-${question.id}",
+                minLines = 3,
+                action = if (fieldAction != null && enabled) ({ fieldAction(question) }) else null,
             )
             QuestionType.Voice -> {
-                if (extra == null) {
+                if (extra == null && fieldAction == null) {
                     Text(stringResource(R.string.nm_voice_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                OutlinedTextField(
+                SoftField(
                     value = draft.text,
-                    onValueChange = { v -> state.update(question.id) { it.copy(text = v) } },
+                    onChange = { v -> state.update(question.id) { it.copy(text = v) } },
                     enabled = enabled,
-                    placeholder = { Text(stringResource(R.string.nm_answer_hint)) },
-                    modifier = Modifier.fillMaxWidth().testTag("input-${question.id}"),
+                    placeholder = stringResource(R.string.nm_answer_hint),
+                    tag = "input-${question.id}",
+                    minLines = 2,
+                    action = if (fieldAction != null && enabled) ({ fieldAction(question) }) else null,
                 )
             }
-            QuestionType.Number -> OutlinedTextField(
+            QuestionType.Number -> SoftField(
                 value = draft.text,
-                onValueChange = { v -> state.update(question.id) { it.copy(text = v) } },
+                onChange = { v -> state.update(question.id) { it.copy(text = v) } },
                 enabled = enabled,
+                placeholder = stringResource(R.string.nm_number_hint),
+                tag = "input-${question.id}",
                 singleLine = true,
-                placeholder = { Text(stringResource(R.string.nm_number_hint)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                keyboard = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 isError = draft.text.isNotBlank() && AnswerState.parseNumber(draft.text) == null,
-                modifier = Modifier.fillMaxWidth().testTag("input-${question.id}"),
             )
             QuestionType.Date -> DateField(question, state, enabled)
             QuestionType.Unknown -> Text(
@@ -114,6 +126,59 @@ public fun QuestionView(
             )
         }
         if (extra != null && enabled && (question.type == QuestionType.Text || question.type == QuestionType.Voice)) extra(question)
+    }
+}
+
+/**
+ * A filled field with soft rounded corners and no outline (the grouped-list
+ * look of iOS), with an optional [action] inside, at the bottom right.
+ */
+@Composable
+private fun SoftField(
+    value: String,
+    onChange: (String) -> Unit,
+    enabled: Boolean,
+    placeholder: String,
+    tag: String,
+    minLines: Int = 1,
+    singleLine: Boolean = false,
+    keyboard: KeyboardOptions = KeyboardOptions.Default,
+    isError: Boolean = false,
+    action: (@Composable () -> Unit)? = null,
+) {
+    val colors = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(16.dp)
+    val text = MaterialTheme.typography.bodyLarge
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(colors.surfaceVariant)
+            .then(if (isError) Modifier.border(1.dp, colors.error, shape) else Modifier),
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            enabled = enabled,
+            singleLine = singleLine,
+            minLines = if (singleLine) 1 else minLines,
+            keyboardOptions = keyboard,
+            textStyle = text.copy(color = if (enabled) colors.onSurface else colors.onSurfaceVariant),
+            cursorBrush = SolidColor(colors.primary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, top = 14.dp, bottom = 14.dp, end = if (action != null) 60.dp else 16.dp)
+                .testTag(tag),
+            decorationBox = { inner ->
+                Box {
+                    if (value.isEmpty()) Text(placeholder, style = text, color = colors.onSurfaceVariant.copy(alpha = 0.75f))
+                    inner()
+                }
+            },
+        )
+        if (action != null) {
+            Box(Modifier.align(Alignment.BottomEnd).padding(8.dp)) { action() }
+        }
     }
 }
 

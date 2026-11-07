@@ -6,6 +6,8 @@ Every change to the schemas in `protocol/schemas/` is recorded here. While `vers
 
 ### Added
 
+- `card` metric block `better` (optional, `"higher"` by default or `"lower"`): which way is good for the number, so renderers color the `delta` by meaning, not by sign (a falling default rate or response time is green).
+- `question-set.severity` (optional, default `"high"`): how urgent the decision is, the same values as `event.severity`. With `"critical"` the person's app may take the full screen with an alarm until they decide, if they chose that in the app (Settings → Alerts and sounds).
 - `reply.answered_by.auth_method` accepts `"delegated"`: a level 0–1 answer given inside the company's own system (intranet, native app) with a person token issued by the company's backend (`POST /v0/member-tokens`). The company authenticated the person, not notific.me; levels 2–3 from that session are recorded as `"totp"`.
 
 - Example `examples/agent-approval.reply.json` (signed reply to the example question set).

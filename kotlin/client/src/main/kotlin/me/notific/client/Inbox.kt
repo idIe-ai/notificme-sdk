@@ -26,7 +26,29 @@ public data class InboxState(
     val connection: Connection = Connection.Offline,
     /** Last error; `unauthorized` means the person must sign in again. */
     val error: NotificMeException? = null,
+    /**
+     * How the decisions that are no longer open ended (question set id →
+     * answered, timeout, cancelled…), from the feed or asked once.
+     */
+    val ended: Map<String, QuestionSetStatus> = emptyMap(),
 ) {
+    /**
+     * How the decision carried by [n] ended: null for a plain notification or
+     * an open decision; [QuestionSetStatus.Unknown] while it is not known yet.
+     * A decision that ran out ends as [QuestionSetStatus.Timeout].
+     */
+    public fun decisionEnd(n: Notification): QuestionSetStatus? {
+        val id = n.questionSetId ?: return null
+        if (questions.any { it.id == id }) return null
+        ended[id]?.let { return it }
+        return when (n.status) {
+            "expired" -> QuestionSetStatus.Timeout
+            "cancelled" -> QuestionSetStatus.Cancelled
+            "resolved" -> QuestionSetStatus.Answered
+            else -> QuestionSetStatus.Unknown
+        }
+    }
+
     /** Unread notifications that are not an open decision (those count once, as a question). */
     val unreadCount: Int
         get() {
@@ -59,6 +81,15 @@ public data class InboxSnapshot(
     val notifications: List<Notification> = emptyList(),
     val questions: List<QuestionSet> = emptyList(),
     @SerialName("user_id") val userId: String? = null,
+    /** See [InboxState.ended]. */
+    val ended: Map<String, QuestionSetStatus> = emptyMap(),
+)
+
+/** The part of a `question_set` change of the feed that says whether it is still open. */
+@Serializable
+internal data class QuestionSetChange(
+    val id: String = "",
+    val status: QuestionSetStatus = QuestionSetStatus.Unknown,
 )
 
 /**
@@ -91,6 +122,7 @@ public class Inbox(
 
     private val lock = Mutex()
     private val byId = LinkedHashMap<String, Notification>()
+    private val ended = HashMap<String, QuestionSetStatus>()
     private var cursor = 0L
     private var job: Job? = null
     private var restored = false
@@ -107,6 +139,7 @@ public class Inbox(
             restored = true
             val snap = runCatching { c.load() }.getOrNull() ?: return
             snap.notifications.forEach { byId[it.id] = it }
+            snap.ended.forEach { (id, status) -> ended.putIfAbsent(id, status) }
             if (snap.cursor > cursor) cursor = snap.cursor
             mutable.update { it.copy(questions = snap.questions, loading = snap.notifications.isEmpty() && snap.questions.isEmpty()) }
             publish()
@@ -223,7 +256,14 @@ public class Inbox(
                     }
                     // A delivery changed (read on another device, delivered…): update it in its notification.
                     SyncEntity.Delivery -> c.data?.let { applyDelivery(it) }
-                    SyncEntity.QuestionSet, SyncEntity.AnswerSet -> questionsChanged = true
+                    SyncEntity.QuestionSet -> {
+                        questionsChanged = true
+                        // Answered, ran out or cancelled: keep how it ended for its notification.
+                        c.data?.let { runCatching { Wire.json.decodeFromJsonElement(QuestionSetChange.serializer(), it) }.getOrNull() }
+                            ?.takeIf { it.status != QuestionSetStatus.Open && it.status != QuestionSetStatus.Unknown }
+                            ?.let { ended[it.id.ifEmpty { c.id }] = it.status }
+                    }
+                    SyncEntity.AnswerSet -> questionsChanged = true
                     else -> Unit
                 }
             }
@@ -248,11 +288,49 @@ public class Inbox(
             .sortedWith(compareBy<QuestionSet> { it.timeoutAt ?: "9999" }.thenByDescending { it.createdAt })
         mutable.update { it.copy(questions = open) }
         scheduleSave()
+        learnEnded(open)
+    }
+
+    /**
+     * Decisions that left the open list before this inbox kept how they ended
+     * (an older cache, or a change missed): asks the server once each, newest first.
+     */
+    private suspend fun learnEnded(open: List<QuestionSet>) {
+        val openIds = open.mapTo(HashSet()) { it.id }
+        val unknown = lock.withLock {
+            byId.values.asSequence()
+                .filter { n -> n.questionSetId.let { it != null && it !in openIds && it !in ended } && n.status !in CLOSED_STATUSES }
+                .sortedByDescending { it.createdAt }
+                .mapNotNull { it.questionSetId }
+                .distinct()
+                .take(MAX_LOOKUPS)
+                .toList()
+        }
+        if (unknown.isEmpty()) return
+        for (id in unknown) {
+            val status = try {
+                client.questionSet(id).status
+            } catch (e: NotificMeApiException) {
+                // Gone or not visible any more: don't ask again. Anything else: next time.
+                if (e.status in GONE) QuestionSetStatus.Unknown else return
+            } catch (e: NotificMeException) {
+                return // offline: next time
+            }
+            if (status == QuestionSetStatus.Open) continue
+            lock.withLock {
+                ended[id] = status
+                publish()
+            }
+        }
     }
 
     private fun publish() {
         val list = byId.values.sortedByDescending { it.createdAt }
-        mutable.update { it.copy(notifications = list) }
+        // Only what still has a notification here is worth keeping.
+        val referenced = list.mapNotNullTo(HashSet()) { it.questionSetId }
+        ended.keys.retainAll(referenced)
+        val endedNow = HashMap(ended)
+        mutable.update { it.copy(notifications = list, ended = endedNow) }
         scheduleSave()
     }
 
@@ -275,7 +353,7 @@ public class Inbox(
 
     private suspend fun save(c: InboxCache) {
         val snap = lock.withLock {
-            InboxSnapshot(cursor = cursor, notifications = byId.values.toList(), questions = state.value.questions)
+            InboxSnapshot(cursor = cursor, notifications = byId.values.toList(), questions = state.value.questions, ended = HashMap(ended))
         }
         runCatching { c.save(snap) }
     }
@@ -295,5 +373,14 @@ public class Inbox(
     private companion object {
         const val MAX_PAGES = 50
         const val SAVE_DELAY_MILLIS = 400L
+
+        /** Lookups of how older decisions ended, per reload of the open list. */
+        const val MAX_LOOKUPS = 20
+
+        /** Notification statuses that already say how its decision ended (see [InboxState.decisionEnd]). */
+        val CLOSED_STATUSES = setOf("expired", "cancelled", "resolved")
+
+        /** HTTP statuses that mean the question set is not there for this person any more. */
+        val GONE = setOf(403, 404, 410)
     }
 }

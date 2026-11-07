@@ -13,6 +13,11 @@
     "context": { "type": "string", "maxLength": 4000, "description": "Explanation for the human (why they are being asked)." },
     "questions": { "type": "array", "minItems": 1, "maxItems": 20, "items": { "$ref": "#/$defs/question" } },
     "level": { "type": "integer", "minimum": 0, "maximum": 4, "default": 1, "description": "Minimum verification level. The workspace may require more." },
+    "severity": {
+      "enum": ["info", "low", "medium", "high", "critical"],
+      "default": "high",
+      "description": "How urgent the decision is. critical: the person's app may take the full screen with an alarm until they decide (their choice in the app)."
+    },
     "quorum": {
       "type": "object", "required": ["required"], "additionalProperties": false,
       "properties": { "required": { "type": "integer", "minimum": 2 } }

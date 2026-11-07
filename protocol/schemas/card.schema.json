@@ -45,7 +45,8 @@
         "label": { "type": "string" },
         "value": { "type": ["number", "string"] },
         "unit": { "type": "string" },
-        "delta": { "type": "string", "examples": ["+18%"] }
+        "delta": { "type": "string", "examples": ["+18%"] },
+        "better": { "enum": ["higher", "lower"], "default": "higher", "description": "Which way is good for this number. With lower (a default rate, a response time), a negative delta is shown as good." }
       }
     },
     "chart": {

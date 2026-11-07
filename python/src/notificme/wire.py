@@ -160,6 +160,7 @@ def ask_to_wire(
     to: Union[str, Iterable[str], None] = None,
     context: Optional[str] = None,
     level: Optional[int] = None,
+    severity: Optional[str] = None,
     quorum: Optional[int] = None,
     offline: Optional[str] = None,
     timeout: Optional[Duration] = None,
@@ -168,7 +169,11 @@ def ask_to_wire(
     callback_url: Optional[str] = None,
     card: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """``ask()`` arguments → ``question-set.schema.json``."""
+    """``ask()`` arguments → ``question-set.schema.json``.
+
+    ``severity``: ``"high"`` (default) or ``"critical"`` (the person's app may take
+    the full screen with an alarm until they decide).
+    """
     return compact(
         {
             "version": "0",
@@ -177,6 +182,7 @@ def ask_to_wire(
             "context": context,
             "questions": [question_to_wire(q) for q in questions],
             "level": level,
+            "severity": severity,
             "quorum": {"required": quorum} if quorum is not None else None,
             "offline": offline,
             "timeout": duration(timeout),

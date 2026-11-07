@@ -266,6 +266,38 @@ class ClientTest {
     }
 
     @Test
+    fun inboxKnowsHowEachDecisionEnded() = runBlocking<Unit> {
+        fun n(id: String, qs: String, status: String = "active") =
+            """{"seq":0,"entity":"notification","id":"$id","op":"upsert","workspace_id":"w1","data":{"id":"$id","created_at":"2026-11-06T10:0$id:00Z","title":"T","status":"$status","question_set_id":"$qs","deliveries":[{"read_at":null}]}}"""
+        val c = client { req ->
+            when (req.url.encodedPath) {
+                "/v0/sync" -> when (req.url.parameters["cursor"]) {
+                    // 1: open; 2: ran out (the feed says so later); 3: closed as expired; 4: older, ended before this inbox kept it.
+                    "0" -> json("""{"changes":[${n("1", "q1")},${n("2", "q2")},${n("3", "q3", "expired")},${n("4", "q4")}],"next_cursor":4,"has_more":false,"reset":false}""")
+                    else -> json("""{"changes":[{"seq":5,"entity":"question_set","id":"q2","op":"upsert","workspace_id":"w1","data":{"id":"q2","status":"timeout"}}],"next_cursor":5,"has_more":false,"reset":false}""")
+                }
+                "/v0/question-sets" -> json("""{"question_sets":[{"id":"q1","workspace_id":"w1","title":"Open"}]}""")
+                "/v0/question-sets/q2" -> json("""{"id":"q2","status":"open"}""")
+                "/v0/question-sets/q4" -> json("""{"id":"q4","status":"answered"}""")
+                else -> json("{}", HttpStatusCode.NotFound)
+            }
+        }
+        val inbox = Inbox(c, CoroutineScope(Dispatchers.Default))
+        inbox.refresh()
+        fun end(id: String) = inbox.state.value.let { s -> s.decisionEnd(s.notifications.single { it.id == id }) }
+        assertNull(end("1"))
+        assertEquals(QuestionSetStatus.Timeout, end("3"))
+        // Asked once, because nothing said how it ended.
+        assertEquals(QuestionSetStatus.Answered, end("4"))
+        assertEquals(1, requests.count { it.url.encodedPath == "/v0/question-sets/q4" })
+        assertEquals(0, requests.count { it.url.encodedPath == "/v0/question-sets/q3" })
+
+        inbox.refresh()
+        assertEquals(QuestionSetStatus.Timeout, end("2"))
+        assertEquals(1, requests.count { it.url.encodedPath == "/v0/question-sets/q4" })
+    }
+
+    @Test
     fun devicesAndContent() = runBlocking<Unit> {
         val c = client { req ->
             when (req.url.encodedPath) {

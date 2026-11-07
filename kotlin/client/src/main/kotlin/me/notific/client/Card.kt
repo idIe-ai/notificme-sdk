@@ -74,6 +74,8 @@ public sealed interface Block {
         val unit: String? = null,
         /** Change, e.g. `+18%`. */
         val delta: String? = null,
+        /** Which way is good: `higher` (default) or `lower` (a default rate, a response time). */
+        val better: String? = null,
     ) : Block {
         override val type: String get() = "metric"
     }
