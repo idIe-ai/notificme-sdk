@@ -10,7 +10,7 @@ public data class User(
     val handle: String = "",
     @SerialName("display_name") val displayName: String = "",
     val locale: String = "en",
-    /** Path on the API (`/v0/avatars/…`); empty when there is no photo. */
+    /** Path on the API (`/v0/avatars/…`); empty when there is no photo. Full URL: [NotificClient.urlOf]. */
     @SerialName("avatar_url") val avatarUrl: String? = null,
     @SerialName("created_at") val createdAt: String = "",
 )
@@ -71,6 +71,8 @@ public data class Workspace(
     /** `owner`, `admin`, `member` or `guest`. */
     val role: String = "",
     val plan: String = "",
+    /** Path of the logo on the API (`/v0/avatars/…`); empty when there is none. Full URL: [NotificClient.urlOf]. */
+    @SerialName("logo_url") val logoUrl: String? = null,
 ) {
     /** Owners and admins may change the workspace's rules (e.g. mute a source). */
     public val canManage: Boolean get() = role == "owner" || role == "admin"

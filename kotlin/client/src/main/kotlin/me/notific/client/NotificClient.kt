@@ -98,6 +98,17 @@ public class NotificClient(
     public suspend fun me(): Me = call(HttpMethod.Get, "/v0/me", Me.serializer())
 
     /**
+     * Full URL of a path the API returns ([User.avatarUrl], [Workspace.logoUrl]);
+     * null when there is none. Photos and logos are public, so the URL works
+     * without the token.
+     */
+    public fun urlOf(path: String?): String? = when {
+        path.isNullOrBlank() -> null
+        path.startsWith("/") -> baseUrl + path
+        else -> path
+    }
+
+    /**
      * One page of the person's feed after [cursor] (0 = from the start).
      * Apply the changes in order and continue from [SyncPage.nextCursor]
      * while [SyncPage.hasMore].
@@ -202,7 +213,7 @@ public class NotificClient(
     public suspend fun contentText(id: String, maxBytes: Int = 2 shl 20): String {
         val info = content(id)
         if (info.sizeBytes > maxBytes) throw NotificMeException("content_too_large", "Content has ${info.sizeBytes} bytes")
-        val url = if (info.url.startsWith("/")) baseUrl + info.url else info.url
+        val url = urlOf(info.url) ?: throw NotificMeException("content_unavailable", "Content has no URL")
         val (status, text) = try {
             withTimeout(config.requestTimeoutMillis) {
                 val r = http.request(url) {

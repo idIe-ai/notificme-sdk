@@ -94,6 +94,19 @@ class ClientTest {
     }
 
     @Test
+    fun photosAndLogosBecomeFullUrls() = runBlocking<Unit> {
+        val c = client {
+            json("""{"user":{"id":"u1","avatar_url":"/v0/avatars/a.webp"},"workspaces":[{"id":"w1","logo_url":"/v0/avatars/l.png"},{"id":"w2","logo_url":""}]}""")
+        }
+        val me = c.me()
+        assertEquals("https://api.test/v0/avatars/a.webp", c.urlOf(me.user.avatarUrl))
+        assertEquals("https://api.test/v0/avatars/l.png", c.urlOf(me.workspaces[0].logoUrl))
+        assertNull(c.urlOf(me.workspaces[1].logoUrl))
+        assertNull(c.urlOf(null))
+        assertEquals("https://cdn.test/x.png", c.urlOf("https://cdn.test/x.png"))
+    }
+
+    @Test
     fun expiredLoginSessionIsCleared() = runBlocking<Unit> {
         val tokens = SessionTokens()
         tokens.set(Session("nm_ses_x", "s1", "2999-01-01T00:00:00Z", User(id = "u")))
