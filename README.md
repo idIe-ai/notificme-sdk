@@ -36,6 +36,7 @@
   <a href="#how-it-works"><b>How it works</b></a> ·
   <a href="typescript/sdk/"><b>TypeScript</b></a> ·
   <a href="python/"><b>Python</b></a> ·
+  <a href="n8n/"><b>n8n</b></a> ·
   <a href="protocol/"><b>Protocol</b></a> ·
   <a href="#white-label-for-your-product"><b>White label</b></a> ·
   <a href="https://docs.notific.me"><b>Docs</b></a>
@@ -243,6 +244,7 @@ Each agreement sets the brand, the deployment model and data retention. [Talk to
 | --- | --- | --- | --- |
 | TypeScript / JavaScript | send events, ask, verify webhooks | `npm install @notificme/sdk` | [`typescript/sdk/`](typescript/sdk/) |
 | Python | send events, ask, verify webhooks | `pip install notificme` | [`python/`](python/) |
+| n8n node | ask a human and pause the workflow until the signed answer, send events | Community Nodes: `@notificme/n8n-nodes-notificme` | [`n8n/`](n8n/) |
 | Protocol (JSON Schemas) | the open contract every SDK follows | | [`protocol/`](protocol/) |
 | Browser client | inbox and decisions inside your own app | *planned* | [`typescript/client/`](typescript/client/) |
 | Kotlin / Android | inbox and decisions inside your own Android app, Compose card renderer, reference app | *not published yet* | [`kotlin/`](kotlin/) |
@@ -262,6 +264,7 @@ typescript/
   sdk/             @notificme/sdk: send events, ask, verify webhooks
   client/          @notificme/client: inbox and decisions in the browser (planned)
 python/            notificme: send events, ask, verify webhooks
+n8n/               @notificme/n8n-nodes-notificme: the n8n node (MIT, as n8n requires)
 kotlin/            client (Kotlin), client-android, cards (Compose) and the sample app
 swift/             iOS client (planned)
 ```
@@ -274,6 +277,9 @@ cd typescript/sdk && npm ci && npm test
 
 # Python
 cd python && python -m venv .venv && .venv/bin/pip install -e ".[dev]" && .venv/bin/pytest
+
+# n8n node
+cd n8n && npm ci && npm run lint && npm test
 
 # Kotlin / Android (JDK 17+, Android SDK)
 cd kotlin && ./gradlew :client:test :cards:testDebugUnitTest :sample:assembleDebug
@@ -297,6 +303,7 @@ Each SDK is versioned and released on its own, from a tag. GitHub Actions publis
 | --- | --- | --- | --- |
 | TypeScript | `typescript/sdk/package.json` and `typescript/sdk/src/version.ts` | `ts-v0.2.0` | [`publish-npm.yml`](.github/workflows/publish-npm.yml) |
 | Python | `python/src/notificme/_version.py` | `py-v0.2.0` | [`publish-pypi.yml`](.github/workflows/publish-pypi.yml) |
+| n8n node | `n8n/package.json` | `n8n-v0.1.0` | [`publish-n8n.yml`](.github/workflows/publish-n8n.yml) |
 
 Releases are automatic: when a version bump is synced here from the monorepo, the sync creates the missing tag on the synced commit, and the tag starts the publish workflow. A tag can also be pushed by hand:
 
@@ -310,4 +317,4 @@ The workflow runs the full CI, checks that the tag matches the package version, 
 
 ## License
 
-[Apache 2.0](LICENSE).
+[Apache 2.0](LICENSE), except the n8n node in [`n8n/`](n8n/), which is [MIT](n8n/LICENSE) as n8n requires for community nodes.

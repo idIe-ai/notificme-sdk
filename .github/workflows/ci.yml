@@ -52,6 +52,26 @@ jobs:
       - name: Package contents
         run: npm pack --dry-run
 
+  n8n:
+    name: n8n node (lint, build, tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: n8n
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: n8n/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      # The linter n8n requires for verified community nodes (strict, Cloud).
+      - run: npm run lint
+      - run: npm test
+      - name: Package contents
+        run: npm pack --dry-run
+
   python:
     name: python ${{ matrix.python }}
     runs-on: ubuntu-latest

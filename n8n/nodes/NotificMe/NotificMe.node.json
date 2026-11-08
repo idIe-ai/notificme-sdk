@@ -1,0 +1,18 @@
+{
+	"node": "@notificme/n8n-nodes-notificme.notificMe",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Communication", "Development"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://github.com/idIe-ai/notificme-sdk/tree/main/n8n#credentials"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/idIe-ai/notificme-sdk/tree/main/n8n#readme"
+			}
+		]
+	}
+}

@@ -94,6 +94,9 @@ public class NotificClient(
     /** Sign in by e-mail (code or magic link). Works without a token. */
     public val auth: Auth = Auth(this)
 
+    /** Contacts, organization members and sending messages and questionnaires to them. */
+    public val people: People = People(this)
+
     /** The signed-in person, their workspaces and the current sync cursor. */
     public suspend fun me(): Me = call(HttpMethod.Get, "/v0/me", Me.serializer())
 

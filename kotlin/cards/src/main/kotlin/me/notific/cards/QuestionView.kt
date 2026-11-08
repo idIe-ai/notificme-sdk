@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -83,7 +84,7 @@ public fun QuestionView(
         }
         when (question.type) {
             QuestionType.YesNo -> YesNo(question, state, enabled)
-            QuestionType.Single -> Single(question, state, enabled)
+            QuestionType.Single -> if (isScale(question)) Scale(question, state, enabled) else Single(question, state, enabled)
             QuestionType.Multi -> Multi(question, state, enabled)
             QuestionType.Text -> SoftField(
                 value = draft.text,
@@ -209,6 +210,41 @@ private fun YesNo(q: Question, state: AnswerState, enabled: Boolean) {
             ),
             modifier = Modifier.testTag("no-${q.id}"),
         )
+    }
+}
+
+/** Options exactly 1 to 5: a rating scale (still a `single` on the wire, so any client answers it). */
+private val scaleOptions = listOf("1", "2", "3", "4", "5")
+
+private fun isScale(q: Question) = q.options == scaleOptions && !q.allowOther
+
+@Composable
+private fun Scale(q: Question, state: AnswerState, enabled: Boolean) {
+    val d = state[q.id]
+    val colors = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (option in q.options) {
+            val selected = d.choice == option
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (selected) colors.primary else colors.surfaceVariant)
+                    .selectable(selected, enabled = enabled, role = Role.RadioButton) {
+                        state.update(q.id) { it.copy(choice = option, other = false) }
+                    }
+                    .testTag("scale-${q.id}-$option"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    option,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (selected) colors.onPrimary else colors.onSurface,
+                )
+            }
+        }
     }
 }
 

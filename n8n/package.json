@@ -1,0 +1,64 @@
+{
+	"name": "@notificme/n8n-nodes-notificme",
+	"version": "0.1.0",
+	"description": "n8n node for notific.me: send events and ask a human for a decision, pausing the workflow until the signed answer comes back.",
+	"license": "MIT",
+	"homepage": "https://github.com/idIe-ai/notificme-sdk/tree/main/n8n#readme",
+	"keywords": [
+		"n8n-community-node-package",
+		"n8n",
+		"notific.me",
+		"human-in-the-loop",
+		"approval",
+		"notifications"
+	],
+	"author": {
+		"name": "notific.me",
+		"email": "services@idie.ai",
+		"url": "https://notific.me"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/idIe-ai/notificme-sdk.git",
+		"directory": "n8n"
+	},
+	"bugs": {
+		"url": "https://github.com/idIe-ai/notificme-sdk/issues"
+	},
+	"scripts": {
+		"build": "n8n-node build",
+		"build:watch": "tsc --watch",
+		"dev": "n8n-node dev",
+		"lint": "n8n-node lint",
+		"lint:fix": "n8n-node lint --fix",
+		"test": "n8n-node build && node --test \"test/**/*.test.mjs\"",
+		"release": "n8n-node release",
+		"prepublishOnly": "n8n-node prerelease"
+	},
+	"files": [
+		"dist",
+		"!dist/tsconfig.tsbuildinfo"
+	],
+	"n8n": {
+		"n8nNodesApiVersion": 1,
+		"strict": true,
+		"credentials": [
+			"dist/credentials/NotificMeApi.credentials.js"
+		],
+		"nodes": [
+			"dist/nodes/NotificMe/NotificMe.node.js"
+		]
+	},
+	"devDependencies": {
+		"@n8n/node-cli": "0.55.5",
+		"eslint": "9.32.0",
+		"prettier": "3.6.2",
+		"typescript": "5.9.2"
+	},
+	"peerDependencies": {
+		"n8n-workflow": "*"
+	},
+	"publishConfig": {
+		"access": "public"
+	}
+}

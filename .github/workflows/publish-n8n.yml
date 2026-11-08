@@ -1,0 +1,57 @@
+# Publishes the n8n node (@notificme/n8n-nodes-notificme) to npm when an
+# `n8n-v<version>` tag is pushed.
+#
+# n8n requires verified community nodes to be published from GitHub Actions
+# with npm provenance (since May 1 2026). `npm run release` (n8n-node release)
+# detects GitHub Actions and runs lint, build and `npm publish` with
+# provenance.
+#
+# Auth: npm Trusted Publishing (OIDC). On npmjs.com, under the package
+# settings → Trusted publishers, add GitHub Actions with:
+#   organization/user: idIe-ai   repository: notificme-sdk
+#   workflow filename: publish-n8n.yml   environment: npm
+# A package that was never published cannot have a trusted publisher yet: for
+# the first version, add a granular NPM_TOKEN secret (publish rights on the
+# @notificme scope), then remove it once the trusted publisher is set.
+name: publish-n8n
+
+on:
+  push:
+    tags: ["n8n-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # OIDC for trusted publishing and provenance
+    defaults:
+      run:
+        working-directory: n8n
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24 # ships npm 11, required for trusted publishing
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: n8n/package-lock.json
+      - name: Tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#n8n-v}"
+          pkg=$(node -p "require('./package.json').version")
+          [ "$tag" = "$pkg" ] || { echo "Tag $GITHUB_REF_NAME does not match package.json $pkg"; exit 1; }
+      - run: npm ci --no-audit --no-fund
+      - name: Publish with provenance
+        run: npm run release
+        env:
+          # Empty unless the NPM_TOKEN secret exists (first version only).
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
