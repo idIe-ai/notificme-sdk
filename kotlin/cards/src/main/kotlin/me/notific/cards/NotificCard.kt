@@ -43,11 +43,19 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import coil3.ImageLoader
 import coil3.compose.SubcomposeAsyncImage
 import coil3.svg.SvgDecoder
@@ -59,6 +67,8 @@ import me.notific.client.Block
 import me.notific.client.Card
 import me.notific.client.CardButton
 import me.notific.client.ChartKind
+import me.notific.client.InlineMarkdown
+import me.notific.client.InlineSpan
 
 /**
  * Draws a notific.me card. With [answers], `options` and `input` blocks are
@@ -106,20 +116,66 @@ public fun NotificCard(
     }
 }
 
-/** `**bold**` → bold spans. Nothing else of Markdown is interpreted. */
-public fun lightMarkdown(text: String): AnnotatedString = buildAnnotatedString {
-    var bold = false
-    for (part in text.split("**")) {
-        if (bold) pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-        append(part)
-        if (bold) pop()
-        bold = !bold
+/** Light Markdown ([InlineMarkdown]) with links in the default text color. */
+public fun lightMarkdown(text: String): AnnotatedString = lightMarkdown(text, linkColor = Color.Unspecified)
+
+/**
+ * Light Markdown ([InlineMarkdown]): bold, italic, code and links. Links are
+ * [LinkAnnotation.Url]s, so a `Text` opens them with the `LocalUriHandler`
+ * (the system browser). When the label hides the destination, its domain
+ * follows in [hostColor], so no one can hide an address behind a name.
+ * With [markdown] false (a notification summary) only bare addresses become
+ * links.
+ */
+public fun lightMarkdown(
+    text: String,
+    linkColor: Color,
+    hostColor: Color = Color.Unspecified,
+    codeBackground: Color = Color.Unspecified,
+    markdown: Boolean = true,
+): AnnotatedString = buildAnnotatedString {
+    for (span in InlineMarkdown.parse(text, markdown)) {
+        when (span) {
+            is InlineSpan.Text -> emphasized(span.bold, span.italic) { append(span.text) }
+            is InlineSpan.Code -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground)) { append(span.text) }
+            is InlineSpan.Link -> {
+                emphasized(span.bold, span.italic) {
+                    val style = TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline))
+                    withLink(LinkAnnotation.Url(span.url, style)) { append(span.text) }
+                }
+                if (span.showHost && span.host.isNotEmpty()) {
+                    withStyle(SpanStyle(color = hostColor, fontSize = 0.85.em)) { append(" (${span.host})") }
+                }
+            }
+        }
+    }
+}
+
+private inline fun AnnotatedString.Builder.emphasized(bold: Boolean, italic: Boolean, block: AnnotatedString.Builder.() -> Unit) {
+    if (!bold && !italic) {
+        block()
+        return
+    }
+    withStyle(
+        SpanStyle(
+            fontWeight = if (bold) FontWeight.Bold else null,
+            fontStyle = if (italic) FontStyle.Italic else null,
+        ),
+    ) { block() }
+}
+
+/** [lightMarkdown] in the theme's colors, for a `Text` in Material 3. */
+@Composable
+public fun rememberLightMarkdown(text: String, markdown: Boolean = true): AnnotatedString {
+    val colors = MaterialTheme.colorScheme
+    return remember(text, markdown, colors.primary, colors.onSurfaceVariant, colors.surfaceVariant) {
+        lightMarkdown(text, colors.primary, colors.onSurfaceVariant, colors.surfaceVariant, markdown)
     }
 }
 
 @Composable
 private fun TextBlock(block: Block.Text) {
-    Text(lightMarkdown(block.text), style = MaterialTheme.typography.bodyMedium)
+    Text(rememberLightMarkdown(block.text), style = MaterialTheme.typography.bodyMedium)
 }
 
 @Composable
@@ -268,7 +324,7 @@ private fun ListBlock(block: Block.BulletList) {
             Row {
                 Text("•", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(8.dp))
-                Text(lightMarkdown(item.text), style = MaterialTheme.typography.bodyMedium)
+                Text(rememberLightMarkdown(item.text), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

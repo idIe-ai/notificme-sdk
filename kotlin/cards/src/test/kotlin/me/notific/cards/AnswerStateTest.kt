@@ -61,4 +61,20 @@ class AnswerStateTest {
         assertEquals("api-v2 on vps-01 exited", text.text)
         assertEquals(2, text.spanStyles.size)
     }
+
+    @Test
+    fun markdownLinkShowsTheDomain() {
+        val text = lightMarkdown("Leia [o estudo](https://claude.ai/artifact/X) e https://notific.me.")
+        assertEquals("Leia o estudo (claude.ai) e https://notific.me.", text.text)
+        val links = text.getLinkAnnotations(0, text.length).map { (it.item as androidx.compose.ui.text.LinkAnnotation.Url).url }
+        assertEquals(listOf("https://claude.ai/artifact/X", "https://notific.me"), links)
+    }
+
+    @Test
+    fun summaryLinksOnlyBareAddresses() {
+        val text = lightMarkdown("**x** https://a.com", linkColor = androidx.compose.ui.graphics.Color.Unspecified, markdown = false)
+        assertEquals("**x** https://a.com", text.text)
+        assertEquals(1, text.getLinkAnnotations(0, text.length).size)
+        assertEquals(0, text.spanStyles.size)
+    }
 }
