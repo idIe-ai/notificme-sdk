@@ -25,7 +25,28 @@ const levels = [
 		value: 3,
 		description: 'For irreversible actions: deleting data, moving money',
 	},
-	{ name: '4 – Quorum', value: 4, description: 'Level 3 plus a quorum of people' },
+	{
+		name: '4 – Device Key',
+		value: 4,
+		description:
+			'Level 3 signed with the device key of the notific.me app. It does not set how many people approve: use Decision Rule.',
+	},
+];
+
+const decisionRules = [
+	{ name: 'Any', value: 'any', description: 'The first answer closes the ask' },
+	{
+		name: 'Each Group (Four Eyes)',
+		value: 'each_group',
+		description: 'One approval from each entry of Decided By (or of To)',
+	},
+	{
+		name: 'Majority',
+		value: 'majority',
+		description: 'More than half of the people who may decide',
+	},
+	{ name: 'Quorum', value: 'quorum', description: 'A number of approvals (Required Approvals)' },
+	{ name: 'Unanimous', value: 'unanimous', description: 'Everyone who may decide approves' },
 ];
 
 export const askOperations: INodeProperties[] = [
@@ -119,12 +140,12 @@ export const askFields: INodeProperties[] = [
 		name: 'to',
 		type: 'string',
 		default: '',
-		placeholder: '@ana, bob@example.com, #finance',
+		placeholder: '@ana, bob@example.com, #finance>=manager',
 		displayOptions: {
 			show: { resource: ['ask'], operation: ['sendAndWait', 'create'], askInput: ['fields'] },
 		},
 		description:
-			'Who decides: @handles, e-mails or #groups, separated by commas. Leave empty to ask the workspace owner.',
+			'Who receives the ask, separated by commas: @handles, e-mails or #groups. #finance>=manager is only the people of #finance with that authority level or above. Leave empty to ask the workspace owner.',
 	},
 	{
 		displayName: 'Title',
@@ -319,6 +340,16 @@ export const askFields: INodeProperties[] = [
 		},
 		options: [
 			{
+				displayName: 'Approving Choices',
+				name: 'approveOptions',
+				type: 'string',
+				typeOptions: { rows: 3 },
+				default: '',
+				placeholder: 'Approve\nOnly the first 10',
+				description:
+					'With a Decision Rule and Response Type Choice: the choices that count as approval, one per line',
+			},
+			{
 				displayName: 'Callback URL',
 				name: 'callbackUrl',
 				type: 'string',
@@ -329,12 +360,40 @@ export const askFields: INodeProperties[] = [
 					'Your webhook that receives the signed answer. With Send and Wait for Response this node sets it.',
 			},
 			{
+				displayName: 'Decided By',
+				name: 'decidedBy',
+				type: 'string',
+				default: '',
+				placeholder: '#board>=director',
+				description:
+					'Who may decide, separated by commas: #groups (#board>=director for an authority level and above), @handles or e-mails. They also receive the ask; the others in To only see it. Leave empty for everyone in To.',
+			},
+			{
+				displayName: 'Decision Rule',
+				name: 'decisionRule',
+				type: 'options',
+				options: decisionRules,
+				default: 'any',
+				description:
+					'What closes the ask when more than one person decides. One person, one vote; rejections count but do not veto: the ask closes as rejected once approval can no longer be reached. Rules other than Any need the Team plan or above.',
+			},
+			{
+				displayName: 'Escalate After',
+				name: 'escalateAfter',
+				type: 'string',
+				default: '',
+				placeholder: '2h',
+				description:
+					'Time since the ask was sent (30m, 2h, 1d) after which Escalate To also receives it, if still open. Must be shorter than the Timeout. Leave empty for half of the Timeout.',
+			},
+			{
 				displayName: 'Escalate To',
 				name: 'escalate',
 				type: 'string',
 				default: '',
-				placeholder: '@backup, partner@example.com',
-				description: 'Who is asked next when nobody answers in time, separated by commas',
+				placeholder: '@backup, #ceo',
+				description:
+					'Who also receives the ask and may decide if it is still open (see Escalate After), separated by commas: @handles, e-mails or #groups',
 			},
 			{
 				displayName: 'Level',
@@ -366,6 +425,31 @@ export const askFields: INodeProperties[] = [
 					'Answers applied when nobody answers in time, by question ID. With Approval the question ID is "approved", with Choice "choice" and with Free Text "text".',
 			},
 			{
+				displayName: 'Requested By',
+				name: 'requestedBy',
+				type: 'string',
+				default: '',
+				placeholder: '@carla',
+				description:
+					'The person who made the request (@handle or e-mail). They see the ask but never approve their own request.',
+			},
+			{
+				displayName: 'Require Signature',
+				name: 'requireSignature',
+				type: 'boolean',
+				default: false,
+				description:
+					'Whether the person must sign the answer with their electronic signature (typed or drawn) and initials, on top of the level. The signed answer carries it in e_signature. Pro plans and above.',
+			},
+			{
+				displayName: 'Required Approvals',
+				name: 'requiredApprovals',
+				type: 'number',
+				typeOptions: { minValue: 1 },
+				default: 2,
+				description: 'With Decision Rule Quorum: how many approvals close the ask',
+			},
+			{
 				displayName: 'Severity',
 				name: 'severity',
 				type: 'options',
@@ -390,6 +474,14 @@ export const askFields: INodeProperties[] = [
 				placeholder: '30m',
 				description:
 					'How long the ask stays open: 30s, 30m, 2h, 3d. When it ends, the On Timeout answers are applied and sent back.',
+			},
+			{
+				displayName: 'Veto',
+				name: 'veto',
+				type: 'boolean',
+				default: false,
+				description:
+					'Whether a single rejection closes the ask as rejected (with a Decision Rule other than Any)',
 			},
 		],
 	},

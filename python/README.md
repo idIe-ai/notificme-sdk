@@ -109,6 +109,34 @@ Answers are converted per question type: `yesno` → `bool`, `single` → `str`,
 
 To create the question set without waiting, use `create_ask()` (returns a handle with `.wait()`), or set `callback_url=` and receive the reply on a webhook.
 
+Pass `require_signature=True` to have the person sign the answer with their electronic signature (their name in a cursive style, or drawn) and initials, on top of the level. It comes back in `result.e_signature` (name, method, PNG images in base64 and their SHA-256), covered by the reply signature. Pro plans and above.
+
+### Groups, decision rules and escalation
+
+`to` accepts groups of your workspace: `"#finance"`, or `"#finance>=manager"` for only the people with that authority level (or above) in that group. Separate who **sees** the card from who **decides**, and say which rule closes the question (Team plan and above):
+
+```python
+result = notific.ask(
+    "Contract 4521 — US$ 36,000",
+    [{"id": "approve", "type": "yesno", "text": "Approve the contract?"}],
+    to=["#legal", "#finance"],  # they all see the card
+    decision={
+        "by": "#board>=director",  # only they may decide
+        "rule": "quorum",  # any | quorum | majority | unanimous | each_group
+        "required": 2,
+        "requested_by": "@carla",  # never approves her own request
+    },
+    escalate=[{"after": "1d", "to": "#ceo"}],  # still open after 1 day: the CEO also decides
+    timeout="2d",
+)
+if result.status == "answered":
+    print(result.decision["approvals"], result.answered_by.group, result.answered_by.authority_level)
+elif result.status == "rejected":
+    ...  # approval became impossible (rejections count, they do not veto) or a veto
+```
+
+The vote is the first question (`yesno`: `True` approves; or a `single` question with `approve_options`). One person, one vote; the eligible people are frozen when you ask and checked again when they vote. `create_ask()` returns `decision` with the votes so far.
+
 ### Untrusted text
 
 Anything a human typed comes back as `UntrustedText`. Never feed it to a shell, SQL, `eval`, HTML or an LLM prompt as instructions. Read it on purpose with `.text`, or embed it as a quoted JSON string with `.quoted()`.

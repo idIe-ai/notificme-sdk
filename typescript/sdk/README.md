@@ -124,6 +124,33 @@ Waiting can end in two errors:
 - If the question set expires or is cancelled, `ask()` throws `AskClosedError`.
 - If you set `maxWaitMs` and it runs out first, it throws `AskPendingError`. You can resume later with `notific.waitForReply(error.askId, { questions })`.
 
+### Groups, decision rules and escalation
+
+`to` accepts groups of your workspace: `#finance`, or `#finance>=manager` for only the people with that authority level (or above) in that group. Separate who **sees** the card from who **decides**, and say which rule closes the question (Team plan and above):
+
+```ts
+const r = await notific.ask({
+  title: "Contract 4521 — US$ 36,000",
+  to: ["#legal", "#finance"],                 // they all see the card
+  questions: [{ id: "approve", type: "yesno", text: "Approve the contract?" }] as const,
+  decision: {
+    by: "#board>=director",                   // only they may decide
+    rule: "quorum",                           // any | quorum | majority | unanimous | each_group
+    required: 2,
+    requestedBy: "@carla",                    // never approves her own request
+  },
+  escalate: [{ after: "1d", to: "#ceo" }],    // still open after 1 day: the CEO also decides
+  timeout: "2d",
+});
+if (r.status === "answered") {
+  // approved: r.decision.approvals, r.votes, r.answeredBy.group ("#board"), r.answeredBy.authorityLevel
+} else if (r.status === "rejected") {
+  // approval became impossible (rejections count, they do not veto) or someone vetoed (`veto: true`)
+}
+```
+
+The vote is the first question (`yesno`: `true` approves; or a `single` question with `approveOptions`). One person, one vote; the eligible people are frozen when you ask and checked again when they vote. `createAsk()` / `getAsk()` return `decision` with the votes so far (`approvals`, `pending`, `votes`).
+
 ### Getting the reply on a webhook instead of waiting
 
 ```ts
@@ -136,6 +163,22 @@ const handle = await notific.createAsk({
 ```
 
 The server then sends the signed reply to `callbackUrl` with the `reply` topic. See [Verifying webhooks](#verifying-webhooks).
+
+### Asking for an electronic signature
+
+Set `requireSignature: true` and the person signs the answer with their electronic signature (their name in a cursive style, or drawn by finger or mouse) and initials, on top of the verification `level`. The first time, they adopt it in the notific.me app or web; it is reused after that. Pro plans and above (`plan_required` otherwise).
+
+```ts
+const r = await notific.ask({
+  to: "ana",
+  title: "Renew the support contract for 2027?",
+  questions: [{ id: "renew", type: "yesno", text: "Do you agree with the renewal terms?" }],
+  requireSignature: true,
+});
+r.eSignature; // { name, initials, method: "typed" | "drawn", signaturePng, signatureSha256, initialsPng, … }
+```
+
+The signature (PNG images in base64 and their SHA-256) is part of the signed reply, so it is covered by the server signature like every other field.
 
 ## Person tokens for your own app
 

@@ -14,6 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -330,5 +331,186 @@ class ClientTest {
         // The signed URL is fetched without the session token.
         assertNull(requests.last().headers[HttpHeaders.Authorization])
         assertEquals("c1", RichContent(htmlRef = "content:c1").contentId)
+    }
+
+    @Test
+    fun typedEmailIsThePersonOrNobody() = runBlocking<Unit> {
+        val c = client { req ->
+            when (req.url.parameters["email"]) {
+                "ana@acme.com" -> json("""{"person":{"id":"u1","handle":"ana","display_name":"Ana","avatar_url":"/v0/avatars/a.webp"}}""")
+                "zed@x.com" -> json("""{"error":{"code":"recipient_not_found"}}""", HttpStatusCode.UnprocessableEntity)
+                else -> json("""{"error":{"code":"validation_failed"}}""", HttpStatusCode.UnprocessableEntity)
+            }
+        }
+        val ana = c.people.recipientByEmail("ana@acme.com", from = "acme")
+        assertEquals(Person("u1", "ana", "Ana", "/v0/avatars/a.webp"), ana)
+        assertEquals("/v0/me/compose/recipient", requests.last().url.encodedPath)
+        assertEquals("acme", requests.last().url.parameters["from"])
+        // Not a contact (or no account at all): nobody, and personal sends no "from".
+        assertNull(c.people.recipientByEmail("zed@x.com"))
+        assertNull(requests.last().url.parameters["from"])
+        // Any other error still reaches the caller.
+        val e = assertFailsWith<NotificMeApiException> { c.people.recipientByEmail("nope") }
+        assertEquals("validation_failed", e.code)
+        assertEquals(3, requests.size)
+    }
+
+    @Test
+    fun replyCarriesTheSignatureShown() = runBlocking<Unit> {
+        val c = client { json(accepted) }
+        val qs = QuestionSet(id = "q1", version = 2, level = 1, requireSignature = true)
+        c.reply(qs, listOf(Answer.yesNo("ok", true)), eSignatureSha256 = "sha256:9f2c")
+        val body = requests.single().bodyJson()
+        assertEquals("sha256:9f2c", body["e_signature"]!!.jsonObject["signature_sha256"]!!.jsonPrimitive.content)
+        assertEquals(1, body["e_signature"]!!.jsonObject.size)
+
+        // Without a signature the field is left out (the server refuses unknown or extra fields).
+        requests.clear()
+        c.reply(QuestionSet(id = "q1"), listOf(Answer.yesNo("ok", true)))
+        assertNull(requests.single().bodyJson()["e_signature"])
+    }
+
+    @Test
+    fun inboxReplyPassesTheSignatureOn() = runBlocking<Unit> {
+        val c = client { req ->
+            when (req.url.encodedPath) {
+                "/v0/replies" -> json(accepted)
+                "/v0/sync" -> json("""{"changes":[],"next_cursor":0,"has_more":false,"reset":false}""")
+                else -> json("{}", HttpStatusCode.NotFound)
+            }
+        }
+        val inbox = Inbox(c, CoroutineScope(Dispatchers.Default))
+        inbox.reply(QuestionSet(id = "q1", requireSignature = true), listOf(Answer.yesNo("ok", true)), eSignatureSha256 = "sha256:abc")
+        val body = requests.first { it.url.encodedPath == "/v0/replies" }.bodyJson()
+        assertEquals("sha256:abc", body["e_signature"]!!.jsonObject["signature_sha256"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun signatureOfTheAccount() = runBlocking<Unit> {
+        val sig = """{"name":"Ana Souza","initials":"AS","method":"typed","style":"great-vibes","signature_png":"AAEC","signature_sha256":"sha256:aa","initials_png":"AwQ=","initials_sha256":"sha256:bb","consent_version":"esign-2026-11-09","adopted_at":"2026-11-09T14:03:11Z"}"""
+        var adopted = false
+        val c = client { req ->
+            when (req.method.value) {
+                "GET" -> json(if (adopted) """{"signature":$sig}""" else """{"signature":null}""")
+                "PUT" -> {
+                    adopted = true
+                    json("""{"signature":$sig}""")
+                }
+                "DELETE" -> respond("", HttpStatusCode.NoContent)
+                else -> json("{}", HttpStatusCode.MethodNotAllowed)
+            }
+        }
+        assertNull(c.account.signature())
+        assertEquals("/v0/me/signature", requests.last().url.encodedPath)
+
+        val e = c.account.adoptSignature(
+            name = " Ana Souza ", initials = "AS", method = SignatureMethod.Typed,
+            signaturePng = byteArrayOf(0, 1, 2), initialsPng = byteArrayOf(3, 4), style = SignatureStyle.GreatVibes,
+        )
+        val put = requests.last()
+        assertEquals("PUT", put.method.value)
+        assertEquals("Bearer nm_ses_test", put.headers[HttpHeaders.Authorization])
+        val body = put.bodyJson()
+        assertEquals("Ana Souza", body["name"]!!.jsonPrimitive.content)
+        assertEquals("AS", body["initials"]!!.jsonPrimitive.content)
+        assertEquals("typed", body["method"]!!.jsonPrimitive.content)
+        assertEquals("great-vibes", body["style"]!!.jsonPrimitive.content)
+        // Standard base64, no data: prefix.
+        assertEquals("AAEC", body["signature_png"]!!.jsonPrimitive.content)
+        assertEquals("AwQ=", body["initials_png"]!!.jsonPrimitive.content)
+        assertEquals("true", body["consent"]!!.jsonPrimitive.content)
+        assertEquals(SignatureStyle.GreatVibes, e.style)
+        assertEquals(SignatureMethod.Typed, e.method)
+        assertEquals("sha256:aa", e.signatureSha256)
+        assertEquals(listOf<Byte>(0, 1, 2), e.signatureBytes().toList())
+        assertEquals("Ana Souza", c.account.signature()?.name)
+
+        c.account.deleteSignature()
+        assertEquals("DELETE", requests.last().method.value)
+        assertEquals("/v0/me/signature", requests.last().url.encodedPath)
+    }
+
+    @Test
+    fun drawnSignatureHasNoStyle() = runBlocking<Unit> {
+        val c = client { json("""{"signature":{"name":"Ana","initials":"A","method":"drawn","signature_png":"AA==","initials_png":"AA==","adopted_at":"2026-11-09T14:03:11Z"}}""") }
+        val e = c.account.adoptSignature("Ana", "A", SignatureMethod.Drawn, byteArrayOf(0), byteArrayOf(0), style = SignatureStyle.Sacramento)
+        assertNull(requests.single().bodyJson()["style"])
+        assertEquals(SignatureMethod.Drawn, e.method)
+        assertNull(e.style)
+    }
+
+    @Test
+    fun signatureErrorsKeepTheirCode() = runBlocking<Unit> {
+        val c = client { req ->
+            when (req.url.encodedPath) {
+                "/v0/replies" -> json(
+                    """{"error":{"code":"signature_changed","message":"changed","details":{"signature_sha256":"sha256:new"}},"request_id":"r-3"}""",
+                    HttpStatusCode.Conflict,
+                )
+                "/v0/me/signature" -> json("""{"error":{"code":"consent_required"}}""", HttpStatusCode.UnprocessableEntity)
+                "/v0/me/compose" -> json("""{"error":{"code":"plan_required","details":{"feature":"e_signature","plan":"free","required_plan":"pro"}}}""", HttpStatusCode.Forbidden)
+                else -> json("{}", HttpStatusCode.NotFound)
+            }
+        }
+        val changed = assertFailsWith<NotificMeApiException> {
+            c.reply(QuestionSet(id = "q1", requireSignature = true), emptyList(), eSignatureSha256 = "sha256:old")
+        }
+        assertEquals(409, changed.status)
+        assertEquals("signature_changed", changed.code)
+        assertEquals("sha256:new", changed.details!!.jsonObject["signature_sha256"]!!.jsonPrimitive.content)
+        // A conflict is final: not retried.
+        assertEquals(1, requests.count { it.url.encodedPath == "/v0/replies" })
+
+        val consent = assertFailsWith<NotificMeApiException> {
+            c.account.adoptSignature("Ana", "A", SignatureMethod.Drawn, byteArrayOf(0), byteArrayOf(0))
+        }
+        assertEquals("consent_required", consent.code)
+
+        val plan = assertFailsWith<NotificMeApiException> {
+            c.people.send(Compose(kind = Compose.FORM, to = listOf("@ana"), title = "Sign", requireSignature = true))
+        }
+        assertEquals("plan_required", plan.code)
+        assertEquals("e_signature", plan.details!!.jsonObject["feature"]!!.jsonPrimitive.content)
+        assertEquals("true", requests.last().bodyJson()["require_signature"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun typedEmailOutsideSaysHowItGoes() = runBlocking<Unit> {
+        val c = client { req ->
+            when (req.url.parameters["email"]) {
+                "pro@x.com" -> json("""{"error":{"code":"recipient_not_found","details":{"delivery":"email"}}}""", HttpStatusCode.UnprocessableEntity)
+                "free@x.com" -> json("""{"error":{"code":"recipient_not_found","details":{"delivery":"email","plan_required":"pro"}}}""", HttpStatusCode.UnprocessableEntity)
+                "guest@x.com" -> json("""{"error":{"code":"recipient_not_found","details":{"delivery":"invite"}}}""", HttpStatusCode.UnprocessableEntity)
+                else -> json("""{"error":{"code":"recipient_not_found","details":{}}}""", HttpStatusCode.UnprocessableEntity)
+            }
+        }
+        val pro = c.people.recipientCheck("pro@x.com")
+        assertEquals(RecipientCheck(delivery = "email"), pro)
+        assertTrue(pro.goesByEmail)
+        val free = c.people.recipientCheck("free@x.com")
+        assertEquals("pro", free.planRequired)
+        assertFalse(free.goesByEmail)
+        assertTrue(c.people.recipientCheck("guest@x.com", from = "acme").goesByEmail)
+        val member = c.people.recipientCheck("no@x.com", from = "acme")
+        assertNull(member.delivery)
+        assertFalse(member.goesByEmail)
+    }
+
+    @Test
+    fun sentShowsRecipientsByEmail() {
+        val item = Wire.json.decodeFromString(SentDetail.serializer(), """
+            {"id":"s1","kind":"form","recipients":[
+               {"person":{"id":"u1","handle":"ana","display_name":"Ana","avatar_url":""},"delivered_at":"2026-11-09T10:00:00Z"},
+               {"person":null,"email":"nova@x.com","delivered_at":"2026-11-09T10:00:00Z","read_at":"2026-11-09T10:05:00Z",
+                "acknowledged_at":null,"answered_at":"2026-11-09T10:06:00Z"}],
+             "answers":[{"person":null,"email":"nova@x.com","answered_at":"2026-11-09T10:06:00Z",
+                         "answers":[{"question_id":"q1","question_text":"Dia?","value":"Terça","free_text":null}]}]}
+        """.trimIndent())
+        assertEquals("ana", item.recipients[0].person?.handle)
+        assertNull(item.recipients[1].person)
+        assertEquals("nova@x.com", item.recipients[1].email)
+        assertEquals("nova@x.com", item.answers.single().email)
+        val res = Wire.json.decodeFromString(ComposeResult.serializer(), """{"kind":"message","recipients":[],"emails":["nova@x.com"]}""")
+        assertEquals(listOf("nova@x.com"), res.emails)
     }
 }

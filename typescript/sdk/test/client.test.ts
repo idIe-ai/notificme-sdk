@@ -507,3 +507,53 @@ describe("members", () => {
     expect(r.answeredBy).toEqual({ identity: "ana@acme.com", deviceId: "dlg-1", levelUsed: 1, authMethod: "delegated" });
   });
 });
+
+describe("electronic signature", () => {
+  it("asks for the signature and reads it from the reply", async () => {
+    const eSignature = {
+      name: "Ana Souza",
+      initials: "AS",
+      method: "typed",
+      style: "great-vibes",
+      signature_png: "iVBORw0KGgo=",
+      signature_sha256: `sha256:${"a".repeat(64)}`,
+      initials_png: "iVBORw0KGgo=",
+      initials_sha256: `sha256:${"b".repeat(64)}`,
+      consent_version: "esign-2026-11-09",
+      adopted_at: "2026-11-02T09:12:40Z",
+    };
+    server = await fakeServer((req, res) => {
+      if (req.method === "POST") return sendJson(res, 201, askView("open"));
+      sendJson(res, 200, askView("answered", { ...reply, e_signature: eSignature }));
+    });
+    const r = await client(server.url).ask({
+      to: "ana",
+      title: "Renew the contract?",
+      questions: [{ id: "ok", type: "yesno", text: "Renew?" }] as const,
+      requireSignature: true,
+    });
+    expect(server.requests[0]!.json).toMatchObject({ require_signature: true });
+    expect(r.eSignature).toEqual({
+      name: "Ana Souza",
+      initials: "AS",
+      method: "typed",
+      style: "great-vibes",
+      signaturePng: "iVBORw0KGgo=",
+      signatureSha256: `sha256:${"a".repeat(64)}`,
+      initialsPng: "iVBORw0KGgo=",
+      initialsSha256: `sha256:${"b".repeat(64)}`,
+      consentVersion: "esign-2026-11-09",
+      adoptedAt: "2026-11-02T09:12:40Z",
+    });
+  });
+
+  it("does not send require_signature unless asked", async () => {
+    server = await fakeServer((req, res) => {
+      if (req.method === "POST") return sendJson(res, 201, askView("open"));
+      sendJson(res, 200, askView("answered", reply));
+    });
+    const r = await client(server.url).ask({ title: "Ok?", questions: [{ id: "ok", type: "yesno", text: "Ok?" }] as const });
+    expect(server.requests[0]!.json).not.toHaveProperty("require_signature");
+    expect(r.eSignature).toBeUndefined();
+  });
+});

@@ -120,7 +120,10 @@ export interface EventInput {
   severity?: Severity;
   /** Defaults to now. */
   occurredAt?: Date | string;
-  /** Recipients (handle, member or group). When omitted, subscriptions decide. */
+  /**
+   * Recipients: `@handle`, member e-mail or group (`#all`, `#admins`, `#owners`,
+   * `#finance`, `#finance>=manager`). When omitted, the workspace owners.
+   */
   to?: string | string[];
   /** Free-form data; sent as is (keys are not converted). */
   payload?: Record<string, unknown>;
@@ -274,12 +277,120 @@ export interface AnsweredBy {
   deviceId: string;
   levelUsed: Level;
   authMethod?: AuthMethod;
+  /** Group through which the person decided (`"#finance"`), when the question has a decision rule. */
+  group?: string;
+  /** The person's authority level in that group (`"manager"`). */
+  authorityLevel?: string;
+}
+
+/**
+ * Decision rule (who may decide and what closes the question):
+ * - `any`: the first answer closes it (the default);
+ * - `quorum`: `required` approvals;
+ * - `majority`: more than half of the eligible people;
+ * - `unanimous`: every eligible person;
+ * - `each_group`: one approval from each entry of `by` ("four eyes").
+ *
+ * Rejections count but do not veto: the question closes as rejected once approval
+ * can no longer be reached (unless `veto: true`). One person, one vote.
+ */
+export type DecisionRule = "any" | "quorum" | "majority" | "unanimous" | "each_group";
+
+/** `decision` block of `ask()`. Rules other than `any` need the Team plan or above. */
+export interface DecisionInput {
+  /**
+   * Who may decide: `#group`, `#group>=authority_level` (e.g. `"#finance>=manager"`),
+   * `@handle` or a member's e-mail. They also receive the card. Default: everyone in `to`.
+   */
+  by?: string | string[];
+  rule?: DecisionRule;
+  /** Approvals needed with `rule: "quorum"`. */
+  required?: number;
+  /** A single rejection closes the question as rejected. */
+  veto?: boolean;
+  /** Question whose answer is the vote (`yesno`, or `single` with `approveOptions`). Default: the first question. */
+  question?: string;
+  /** With a single-choice vote question: the options that count as approval. */
+  approveOptions?: string[];
+  /** The member who made the request (`@handle` or e-mail): they never approve their own request. */
+  requestedBy?: string;
+}
+
+/** A step of the escalation chain. */
+export interface EscalationStep {
+  /** Time since the question was sent, e.g. `"30m"`. Default: half of the timeout. */
+  after?: Duration;
+  /** Who also receives it and may decide from then on (`#group`, `#group>=level`, `@handle`, e-mail). */
+  to: string | string[];
+}
+
+/** How the decision rule closed the question (in the signed reply). */
+export interface DecisionOutcome {
+  rule: DecisionRule;
+  required?: number;
+  eligible: number;
+  approvals: number;
+  rejections: number;
+  /** `approved` or `rejected` (approval impossible, or a veto). */
+  outcome?: "approved" | "rejected";
+  by?: string[];
+  escalationStep?: number;
+}
+
+/** One vote (one person, one vote). */
+export interface Vote {
+  identity: string;
+  handle?: string;
+  approve: boolean;
+  answeredAt: string;
+  levelUsed?: Level;
+  authMethod?: AuthMethod;
+  group?: string;
+  authorityLevel?: string;
+}
+
+/** Partial state of the decision rule while the question is open (`getAsk()`). */
+export interface DecisionProgress {
+  rule: DecisionRule;
+  required: number;
+  eligible: number;
+  approvals: number;
+  rejections: number;
+  pending: number;
+  outcome?: "approved" | "rejected";
+  by?: string[];
+  votes: { handle?: string; displayName: string; approve: boolean; at: string; group?: string; authorityLevel?: string }[];
+  escalationStep: number;
+  escalationSteps: number;
+  nextEscalationAt?: string;
 }
 
 export interface ReplySignature {
   alg: "ES256" | "Ed25519";
   keyId?: string;
   value: string;
+}
+
+/**
+ * Electronic signature the person applied to the answer (asked with
+ * `requireSignature`). Images are PNG in base64; hashes are `sha256:<hex>` of
+ * the PNG bytes. The reply signature covers it like every other field.
+ */
+export interface ESignature {
+  /** Full name the person adopted. */
+  name: string;
+  initials: string;
+  /** `typed`: the name in a cursive style; `drawn`: drawn by finger or mouse. */
+  method: "typed" | "drawn";
+  /** Cursive style of a typed signature (`great-vibes`, `dancing-script`, `sacramento`, `mr-dafoe`). */
+  style?: string;
+  signaturePng: string;
+  signatureSha256: string;
+  initialsPng: string;
+  initialsSha256: string;
+  consentVersion?: string;
+  /** When the person adopted this signature. */
+  adoptedAt: string;
 }
 
 interface AskResultBase {
@@ -294,7 +405,13 @@ interface AskResultBase {
   answeredBy?: AnsweredBy;
   answeredAt?: string;
   contentHash?: string;
+  /** The person's electronic signature, when the question set had `requireSignature`. */
+  eSignature?: ESignature;
   signature?: ReplySignature;
+  /** How the decision rule closed it (questions with `decision`). */
+  decision?: DecisionOutcome;
+  /** Every vote, in order (questions with a decision rule). */
+  votes?: Vote[];
   /** Every answer with its question text, raw value and free text. */
   details: Record<string, AnswerDetail>;
   /** The reply exactly as received (snake_case wire format). */
@@ -308,7 +425,10 @@ export interface AnsweredAskResult<Qs extends readonly Question[]> extends AskRe
 }
 
 export interface UnansweredAskResult<Qs extends readonly Question[]> extends AskResultBase {
-  /** `timeout`: nobody answered in time (`onTimeout` values are applied). `rejected`: the human declined. */
+  /**
+   * `timeout`: nobody answered in time (`onTimeout` values are applied). `rejected`:
+   * the decision rule closed it as rejected (approval impossible, or a veto).
+   */
   status: "timeout" | "rejected";
   timedOut: boolean;
   answers: PartialAnswers<Qs>;
@@ -336,18 +456,29 @@ export interface AskInput<Qs extends readonly Question[] = readonly Question[]> 
    * the full screen with an alarm until they decide (their choice in the app).
    */
   severity?: Severity;
-  /** Number of people that must answer (2 or more). */
+  /** Shorthand for `decision: { rule: "quorum", required }` among `to`. */
   quorum?: number;
+  /** Who may decide and which rule closes the question. */
+  decision?: DecisionInput;
   /** Whether the app may answer while offline. */
   offline?: "allowed" | "denied";
   /** How long the humans have, e.g. `"30m"`. */
   timeout?: Duration;
   /** Answers applied when nobody answers in time, by question id. */
   onTimeout?: { [K in Qs[number]["id"]]?: JsonValue };
-  /** Who is notified when the timeout is near. */
-  escalate?: string[];
+  /**
+   * Escalation chain: if still open after each step's time, the step's recipients
+   * also receive it and may decide. A plain string is `{ to: string }` at half the timeout.
+   */
+  escalate?: (EscalationStep | string)[];
   /** Webhook that receives the signed reply (see `verifyWebhook`). */
   callbackUrl?: string;
+  /**
+   * Ask the person to sign the answer with their electronic signature (typed
+   * in a cursive style or drawn) and initials, on top of `level`. The result
+   * carries it in `eSignature`. Pro plans and above (`plan_required` otherwise).
+   */
+  requireSignature?: boolean;
   card?: Card;
 }
 
@@ -447,4 +578,6 @@ export interface AskInfo {
   notificationId?: string;
   contentHash?: string;
   pollUrl?: string;
+  /** Partial state of the decision rule (questions with `decision` or sent to a `#group`). */
+  decision?: DecisionProgress;
 }

@@ -6,6 +6,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 /** Every example in sdk/protocol/examples must be readable by this client. */
 class ProtocolExamplesTest {
@@ -78,12 +80,40 @@ class ProtocolExamplesTest {
     }
 
     @Test
+    fun decisionRuleOfAnAskDecodes() {
+        val f = File(dir, "contract-board-quorum.question-set.json")
+        if (!f.exists()) return
+        val d = Wire.json.decodeFromJsonElement(QuestionSet.serializer(), read(f)).decision!!
+        assertEquals(DecisionRule.Quorum, d.rule)
+        assertEquals(2, d.required)
+        // One entry or a list.
+        assertEquals(listOf("#board>=director"), d.by)
+    }
+
+    @Test
     fun repliesDecode() {
         for (f in examples("reply")) {
             val reply = Wire.json.decodeFromJsonElement(Reply.serializer(), read(f))
             assertEquals(ReplyStatus.Answered, reply.status, f.name)
             assertTrue(reply.answers.isNotEmpty())
             assertTrue(reply.signature != null)
+        }
+    }
+
+    @Test
+    fun signedRepliesCarryImagesThatMatchTheirHashes() {
+        for (f in examples("reply")) {
+            val raw = read(f)
+            if ("e_signature" !in raw) continue
+            val e = Wire.json.decodeFromJsonElement(Reply.serializer(), raw).eSignature
+            assertTrue(e != null, f.name)
+            assertTrue(e.method != SignatureMethod.Unknown, "${f.name}: unknown signature method")
+            assertTrue(e.hashesMatch(), "${f.name}: e_signature hashes do not match the images")
+        }
+        for (f in examples("question-set")) {
+            val raw = read(f)
+            val expected = raw["require_signature"]?.jsonPrimitive?.booleanOrNull ?: false
+            assertEquals(expected, Wire.json.decodeFromJsonElement(QuestionSet.serializer(), raw).requireSignature, f.name)
         }
     }
 }

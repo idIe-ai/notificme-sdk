@@ -89,6 +89,9 @@ class AskInfo:
     poll_url: Optional[str] = None
     #: The raw reply (snake_case), present when ``answered`` or ``timeout``.
     reply: Optional[Dict[str, Any]] = None
+    #: Partial state of the decision rule (snake_case): ``rule``, ``required``,
+    #: ``eligible``, ``approvals``, ``rejections``, ``pending``, ``votes``…
+    decision: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -136,6 +139,10 @@ class AnsweredBy:
     #: ``tap``, ``unlock``, ``biometric``, ``device_pin``, ``app_password``, ``totp`` or
     #: ``delegated`` (see ``AuthMethod``).
     auth_method: Optional[AuthMethod] = None
+    #: Group through which the person decided (``"#finance"``), with a decision rule.
+    group: Optional[str] = None
+    #: The person's authority level in that group (``"manager"``).
+    authority_level: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -143,6 +150,30 @@ class ReplySignature:
     alg: str
     value: str
     key_id: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ESignature:
+    """Electronic signature the person applied (question set with ``require_signature``).
+
+    Images are PNG in base64; hashes are ``sha256:<hex>`` of the PNG bytes. The
+    reply signature covers it like every other field.
+    """
+
+    #: Full name the person adopted.
+    name: str
+    initials: str
+    #: ``typed`` (the name in a cursive style) or ``drawn`` (drawn by finger or mouse).
+    method: str
+    signature_png: str
+    signature_sha256: str
+    initials_png: str
+    initials_sha256: str
+    #: When the person adopted this signature.
+    adopted_at: str
+    #: Cursive style of a typed signature (``great-vibes``, ``dancing-script``, ``sacramento``, ``mr-dafoe``).
+    style: Optional[str] = None
+    consent_version: Optional[str] = None
 
 
 @dataclass
@@ -158,7 +189,8 @@ class AskResult:
     #: Question set id.
     id: str
     version: int
-    #: ``answered``, ``timeout`` (``on_timeout`` values applied) or ``rejected``.
+    #: ``answered``, ``timeout`` (``on_timeout`` values applied) or ``rejected`` (the
+    #: decision rule closed it as rejected: approval impossible, or a veto).
     status: str
     timed_out: bool
     #: Natural-language summary of the decision, ready for an AI agent.
@@ -171,7 +203,14 @@ class AskResult:
     answered_by: Optional[AnsweredBy] = None
     answered_at: Optional[str] = None
     content_hash: Optional[str] = None
+    #: The person's electronic signature, when the question set had ``require_signature``.
+    e_signature: Optional[ESignature] = None
     signature: Optional[ReplySignature] = None
+    #: How the decision rule closed it (snake_case): ``rule``, ``required``, ``eligible``,
+    #: ``approvals``, ``rejections``, ``outcome`` (``approved``/``rejected``), ``by``.
+    decision: Optional[Dict[str, Any]] = None
+    #: Every vote (snake_case): ``identity``, ``handle``, ``approve``, ``answered_at``, ``group``…
+    votes: Optional[List[Dict[str, Any]]] = None
 
 
 @dataclass(frozen=True)

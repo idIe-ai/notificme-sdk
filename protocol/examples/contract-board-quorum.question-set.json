@@ -1,0 +1,21 @@
+{
+  "version": "0",
+  "to": ["#legal", "#finance"],
+  "title": "Contract 4521 — US$ 36,000",
+  "context": "Three-year support renewal with **Acme Hosting**. Legal and finance see it; two directors must approve.",
+  "questions": [
+    { "id": "approve", "type": "yesno", "text": "Approve the contract?" },
+    { "id": "note", "type": "text", "text": "Notes for the requester", "optional": true }
+  ],
+  "level": 1,
+  "decision": {
+    "by": "#board>=director",
+    "rule": "quorum",
+    "required": 2,
+    "requested_by": "@carla"
+  },
+  "timeout": "2d",
+  "escalate": [{ "after": "1d", "to": ["#ceo"] }],
+  "on_timeout": { "approve": false },
+  "callback_url": "https://erp.example.com/hooks/notificme"
+}

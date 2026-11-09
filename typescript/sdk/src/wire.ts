@@ -122,11 +122,23 @@ export function askToWire(a: AskInput): Record<string, unknown> {
     level: a.level,
     severity: a.severity,
     quorum: a.quorum !== undefined ? { required: a.quorum } : undefined,
+    decision: a.decision
+      ? compact({
+          by: list(a.decision.by),
+          rule: a.decision.rule,
+          required: a.decision.required,
+          veto: a.decision.veto,
+          question: a.decision.question,
+          approve_options: a.decision.approveOptions,
+          requested_by: a.decision.requestedBy,
+        })
+      : undefined,
     offline: a.offline,
     timeout: duration(a.timeout),
     on_timeout: a.onTimeout as Record<string, JsonValue> | undefined,
-    escalate: a.escalate,
+    escalate: a.escalate?.map((s) => (typeof s === "string" ? s : compact({ after: duration(s.after), to: list(s.to) }))),
     callback_url: a.callbackUrl,
+    require_signature: a.requireSignature ? true : undefined,
     card: cardToWire(a.card),
   });
 }
@@ -144,6 +156,31 @@ export function askInfoFromWire(v: AskView): AskInfo {
     notificationId: v.notification_id,
     contentHash: v.content_hash,
     pollUrl: v.poll_url,
+    decision: v.decision
+      ? compact({
+          rule: v.decision.rule,
+          required: v.decision.required,
+          eligible: v.decision.eligible,
+          approvals: v.decision.approvals,
+          rejections: v.decision.rejections,
+          pending: v.decision.pending,
+          outcome: v.decision.outcome,
+          by: v.decision.by,
+          votes: (v.decision.votes ?? []).map((x) =>
+            compact({
+              handle: x.handle,
+              displayName: x.display_name,
+              approve: x.approve,
+              at: x.at,
+              group: x.group,
+              authorityLevel: x.authority_level,
+            }),
+          ),
+          escalationStep: v.decision.escalation_step,
+          escalationSteps: v.decision.escalation_steps,
+          nextEscalationAt: v.decision.next_escalation_at,
+        })
+      : undefined,
   }) as AskInfo;
 }
 
@@ -251,10 +288,50 @@ export function toAskResult<const Qs extends readonly Question[] = readonly Ques
           deviceId: r.answered_by.device_id,
           levelUsed: r.answered_by.level_used,
           authMethod: r.answered_by.auth_method,
+          group: r.answered_by.group,
+          authorityLevel: r.answered_by.authority_level,
         })
       : undefined,
+    decision: r.decision
+      ? compact({
+          rule: r.decision.rule,
+          required: r.decision.required,
+          eligible: r.decision.eligible,
+          approvals: r.decision.approvals,
+          rejections: r.decision.rejections,
+          outcome: r.decision.outcome,
+          by: r.decision.by,
+          escalationStep: r.decision.escalation_step,
+        })
+      : undefined,
+    votes: r.votes?.map((v) =>
+      compact({
+        identity: v.identity,
+        handle: v.handle,
+        approve: v.approve,
+        answeredAt: v.answered_at,
+        levelUsed: v.level_used,
+        authMethod: v.auth_method,
+        group: v.group,
+        authorityLevel: v.authority_level,
+      }),
+    ),
     answeredAt: r.answered_at,
     contentHash: r.content_hash,
+    eSignature: r.e_signature
+      ? compact({
+          name: r.e_signature.name,
+          initials: r.e_signature.initials,
+          method: r.e_signature.method,
+          style: r.e_signature.style,
+          signaturePng: r.e_signature.signature_png,
+          signatureSha256: r.e_signature.signature_sha256,
+          initialsPng: r.e_signature.initials_png,
+          initialsSha256: r.e_signature.initials_sha256,
+          consentVersion: r.e_signature.consent_version,
+          adoptedAt: r.e_signature.adopted_at,
+        })
+      : undefined,
     signature: r.signature
       ? compact({ alg: r.signature.alg, keyId: r.signature.key_id, value: r.signature.value })
       : undefined,

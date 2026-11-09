@@ -78,15 +78,34 @@ public data class QuestionSet(
     val answerable: Boolean = false,
     /** Level 2 or 3, answerable with an authenticator-app code instead of a device signature. */
     @SerialName("answerable_with_totp") val answerableWithTotp: Boolean = false,
+    /**
+     * The sender asks for the person's electronic signature on top of the
+     * verification [level]: reply with [NotificClient.reply]'s
+     * `eSignatureSha256`. The signed [Reply.eSignature] carries it.
+     */
+    @SerialName("require_signature") val requireSignature: Boolean = false,
     /** The signed reply, once answered. */
     val reply: Reply? = null,
     /** Rebuilt from the signed archive (the decision left the hot database). */
     val archived: Boolean = false,
+    /**
+     * Decision rule (quorum, majority, four eyes…) and its votes so far;
+     * null for a question the first answer closes. With
+     * [DecisionView.canDecide] false the person only sees it ([answerable] is
+     * false too).
+     */
+    val decision: DecisionView? = null,
 ) {
     /** The card to draw: the sender's card with every question in it. */
     public fun cardWithQuestions(): Card = (card ?: Card(title = title)).withQuestions(questions)
 
     public fun question(id: String): Question? = questions.firstOrNull { it.id == id }
+
+    /**
+     * The person may answer it: there is no decision rule, or the rule lets
+     * them vote now (not only watching, not voted yet, not the requester).
+     */
+    public val canDecide: Boolean get() = decision?.canDecide != false
 }
 
 /** How the person proved who they are. Session replies use [Tap], [Unlock] or [Totp]. */
@@ -122,7 +141,14 @@ public data class Reply(
     @SerialName("answered_by") val answeredBy: AnsweredBy? = null,
     @SerialName("answered_at") val answeredAt: String? = null,
     @SerialName("content_hash") val contentHash: String? = null,
+    /** The electronic signature applied, when the question set had [QuestionSet.requireSignature]. */
+    @SerialName("e_signature") val eSignature: ESignature? = null,
+    /** The server's signature of the whole reply (it covers [eSignature] too). */
     val signature: ReplySignature? = null,
+    /** How the decision rule closed it (questions with a rule). [status] is [ReplyStatus.Rejected] when approval became impossible. */
+    val decision: ReplyDecision? = null,
+    /** Every vote, in order (questions with a rule). */
+    val votes: List<ReplyVote> = emptyList(),
 )
 
 @Serializable
@@ -142,6 +168,10 @@ public data class AnsweredBy(
     @SerialName("device_id") val deviceId: String? = null,
     @SerialName("level_used") val levelUsed: Int = 0,
     @SerialName("auth_method") val authMethod: AuthMethod? = null,
+    /** The group the person decided through (`#finance`), with a decision rule. */
+    val group: String? = null,
+    /** Their authority level in that group (`manager`). */
+    @SerialName("authority_level") val authorityLevel: String? = null,
 )
 
 @Serializable
@@ -153,10 +183,23 @@ public data class ReplySignature(
     val value: String,
 )
 
-/** `POST /v0/replies` answer. */
+/**
+ * `POST /v0/replies` answer. A question with a decision rule records a vote:
+ * [closed] says whether it closed the question, and [decision] is the state
+ * of the rule after it.
+ */
 @Serializable
 public data class ReplyAccepted(
     @SerialName("question_set_id") val questionSetId: String,
     @SerialName("answer_set_id") val answerSetId: String,
-    val reply: Reply,
-)
+    /** The signed reply; only when this answer closed the question. */
+    val reply: Reply? = null,
+    /** Questions with a decision rule: false = vote recorded, the rule waits for others. */
+    val closed: Boolean? = null,
+    /** Questions with a decision rule: the shared state after this vote. */
+    val decision: DecisionView? = null,
+    val status: String = "accepted",
+) {
+    /** The question is over (always, without a decision rule). */
+    public val isClosed: Boolean get() = closed != false
+}

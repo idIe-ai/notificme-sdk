@@ -71,6 +71,34 @@ client.devices()                   // this phone is `current`; revokeDevice(id) 
 client.contentText(notification.content?.rich?.contentId ?: return)      // sender's HTML (`content.rich`), signed URL
 ```
 
+Decisions with a rule (quorum, majority, unanimous, one from each group) carry the votes so far, and an organization's groups and authority ladder are one call away:
+
+```kotlin
+val d = questionSet.decision       // null: the first answer closes it
+d?.approvals; d?.required          // "1 of 2 approvals"
+d?.votes                           // who voted, through which #group and authority level
+if (!questionSet.canDecide) d?.reason   // not_eligible, already_voted, requester_cannot_approve
+val accepted = inbox.reply(questionSet, answers)
+accepted.isClosed                  // false: vote recorded, the question stays open with it
+
+client.groups.list("acme")         // #finance, #board… (groupsEnabled, canManage)
+client.groups.addMembers("acme", "finance", listOf(userId), authorityLevel = "manager")
+client.people.preview(listOf("#finance>=manager"), from = "acme").count   // "This goes to N people"
+```
+
+Questions that ask for an electronic signature (`questionSet.requireSignature`): the person adopts one once (the name typed in a cursive style, or drawn, plus initials; your app draws the PNGs), then each signed reply sends the hash of the signature shown:
+
+```kotlin
+val signature = client.account.signature()            // null until adopted
+    ?: client.account.adoptSignature(
+        name = "Ana Souza", initials = "AS", method = SignatureMethod.Typed, style = SignatureStyle.GreatVibes,
+        signaturePng = signatureBytes, initialsPng = initialsBytes,   // after the person accepted your consent text
+    )
+inbox.reply(questionSet, answers.toAnswers(), eSignatureSha256 = signature.signatureSha256)
+// signature_changed (409): it changed on another device; show client.account.signature() again.
+// The signed reply carries it: reply.eSignature (images and hashes; hashesMatch() rechecks them).
+```
+
 ### What you get
 
 - **Tolerant to newer servers.** Unknown card blocks arrive as `Block.Unknown`, unknown question types as `QuestionType.Unknown`, unknown fields are ignored.

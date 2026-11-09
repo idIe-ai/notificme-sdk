@@ -40,11 +40,66 @@
         "auth_method": {
           "enum": ["tap", "unlock", "biometric", "device_pin", "app_password", "totp", "delegated"],
           "description": "How the human proved it was them. \"delegated\": answered (level 0-1) inside the company's own system, with a person token issued by the company's backend (the company authenticated the person, not notific.me)."
+        },
+        "group": { "type": "string", "description": "The group through which the person could decide (#finance), when the question has a decision rule." },
+        "authority_level": { "type": "string", "description": "The person's authority level in that group (manager)." }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["rule"],
+      "additionalProperties": false,
+      "description": "How the decision rule closed the question. With status answered the request was approved; with rejected, approval could no longer be reached (or someone vetoed).",
+      "properties": {
+        "rule": { "enum": ["any", "quorum", "majority", "unanimous", "each_group"] },
+        "required": { "type": "integer", "minimum": 1, "description": "Approvals the rule needed." },
+        "eligible": { "type": "integer", "minimum": 0, "description": "People who could decide when it closed." },
+        "approvals": { "type": "integer", "minimum": 0 },
+        "rejections": { "type": "integer", "minimum": 0 },
+        "outcome": { "enum": ["approved", "rejected"] },
+        "by": { "type": "array", "items": { "type": "string" }, "description": "Who could decide (as asked)." },
+        "escalation_step": { "type": "integer", "minimum": 0, "description": "How many escalation steps had gone out." }
+      }
+    },
+    "votes": {
+      "type": "array",
+      "description": "Every vote, in order, when the question has a decision rule. One vote per person.",
+      "items": {
+        "type": "object",
+        "required": ["identity", "approve", "answered_at"],
+        "additionalProperties": false,
+        "properties": {
+          "identity": { "type": "string" },
+          "handle": { "type": "string" },
+          "approve": { "type": "boolean" },
+          "answered_at": { "type": "string", "format": "date-time" },
+          "level_used": { "type": "integer", "minimum": 0, "maximum": 4 },
+          "auth_method": { "enum": ["tap", "unlock", "biometric", "device_pin", "app_password", "totp", "delegated"] },
+          "group": { "type": "string" },
+          "authority_level": { "type": "string" }
         }
       }
     },
     "answered_at": { "type": "string", "format": "date-time" },
     "content_hash": { "type": "string", "description": "SHA-256 of the content shown to the human." },
+    "e_signature": {
+      "type": "object",
+      "description": "Electronic signature the person applied, when the question set had require_signature. Covered by the reply signature like every other field.",
+      "required": ["name", "initials", "method", "signature_png", "signature_sha256", "initials_png", "initials_sha256", "adopted_at"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "description": "Full name the person adopted." },
+        "initials": { "type": "string" },
+        "method": { "enum": ["typed", "drawn"], "description": "typed: the name in a cursive style; drawn: drawn by finger or mouse." },
+        "style": { "type": "string", "description": "Cursive style of a typed signature (great-vibes, dancing-script, sacramento, mr-dafoe)." },
+        "signature_png": { "type": "string", "contentEncoding": "base64", "contentMediaType": "image/png", "description": "The signature image (PNG, transparent background)." },
+        "signature_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "description": "SHA-256 of the signature PNG bytes." },
+        "initials_png": { "type": "string", "contentEncoding": "base64", "contentMediaType": "image/png" },
+        "initials_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "consent_version": { "type": "string", "description": "Version of the consent text the person accepted when adopting." },
+        "adopted_at": { "type": "string", "format": "date-time", "description": "When the person adopted this signature." }
+      }
+    },
     "signature": {
       "type": "object",
       "required": ["alg", "value"],

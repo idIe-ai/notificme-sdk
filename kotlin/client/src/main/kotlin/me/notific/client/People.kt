@@ -5,8 +5,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 /**
  * Contacts and sending from the interface: the person's own contacts (by
@@ -89,12 +94,63 @@ public class People internal constructor(private val client: NotificClient) {
 
     /**
      * Sends a message or a questionnaire. Errors: `recipient_not_found`,
-     * `recipient_blocked`, `compose_forbidden`, `validation_failed` (with
-     * the paths in [NotificMeApiException.details]).
+     * `recipient_blocked`, `compose_forbidden`, `too_many_recipients` (more
+     * people than the plan allows in one send), `validation_failed` (with
+     * the paths in [NotificMeApiException.fieldErrors], e.g. an unknown
+     * group or authority level at `/to/2`), `plan_required` (a
+     * questionnaire with [Compose.requireSignature] below the Pro plan).
      */
     public suspend fun send(compose: Compose): ComposeResult =
         client.call(HttpMethod.Post, "/v0/me/compose", ComposeResult.serializer(),
             body = Wire.json.encodeToJsonElement(Compose.serializer(), compose))
+
+    /**
+     * How many people a send to [to] from [from] would reach (groups opened
+     * now, nobody twice, never the sender) and the plan's limit, to show
+     * "This goes to 230 people" before sending. Errors like [send].
+     */
+    public suspend fun preview(to: List<String>, from: String? = null): ComposePreview =
+        client.call(HttpMethod.Post, "/v0/me/compose/preview", ComposePreview.serializer(), body = buildJsonObject {
+            if (!from.isNullOrBlank()) put("from", from)
+            putJsonArray("to") { to.forEach { add(it) } }
+        })
+
+    /**
+     * Who the e-mail typed in "To" belongs to, so the recipient can show as
+     * that person: a contact with that verified e-mail (personal, [from]
+     * null) or the member whose membership e-mail it is (the organization
+     * [from]). Null when it is neither (`recipient_not_found`, the same answer
+     * whether or not the e-mail has an account); other errors are thrown.
+     * [recipientCheck] also says how an e-mail of someone outside would go.
+     */
+    public suspend fun recipientByEmail(email: String, from: String? = null): Person? =
+        recipientCheck(email, from).person
+
+    /**
+     * Checks the e-mail typed in "To": the person (contact or member) or,
+     * for someone outside, how it would go ([RecipientCheck.delivery]):
+     * `email` (personal: the e-mail inbox, Pro plan; [RecipientCheck.planRequired]
+     * is `pro` on the free plan) or `invite` (organization owner/admin: a
+     * guest invite, and the message waits until it is accepted). The answer
+     * is the same whether or not the e-mail has an account.
+     */
+    public suspend fun recipientCheck(email: String, from: String? = null): RecipientCheck =
+        try {
+            RecipientCheck(
+                person = client.call(
+                    HttpMethod.Get, "/v0/me/compose/recipient", ComposeRecipient.serializer(),
+                    query = mapOf("email" to email, "from" to from?.takeIf { it.isNotBlank() }),
+                ).person,
+            )
+        } catch (e: NotificMeApiException) {
+            if (e.status != 422 || e.code != "recipient_not_found") throw e
+            val d = e.details as? JsonObject
+            RecipientCheck(
+                person = null,
+                delivery = (d?.get("delivery") as? JsonPrimitive)?.contentOrNull,
+                planRequired = (d?.get("plan_required") as? JsonPrimitive)?.contentOrNull,
+            )
+        }
 
     /** What the person sent, newest first. */
     public suspend fun sent(cursor: String? = null, limit: Int = 50): SentPage =
@@ -128,6 +184,30 @@ public class People internal constructor(private val client: NotificClient) {
 
     @Serializable
     private data class TemplateList(val items: List<FormTemplate> = emptyList())
+
+    @Serializable
+    private data class ComposeRecipient(val person: Person)
+}
+
+/**
+ * What [People.recipientCheck] found: the [person] (contact or member) or,
+ * for an e-mail outside, how it would go.
+ */
+@Serializable
+public data class RecipientCheck(
+    val person: Person? = null,
+    /** `email` (the e-mail inbox), `invite` (guest invite) or null (it does not go). */
+    val delivery: String? = null,
+    /** On the free plan, the plan that would allow sending by e-mail (`pro`). */
+    val planRequired: String? = null,
+) {
+    /** Goes by e-mail (personal, Pro) or as an invite (organization). */
+    val goesByEmail: Boolean get() = person == null && planRequired == null && (delivery == EMAIL || delivery == INVITE)
+
+    public companion object {
+        public const val EMAIL: String = "email"
+        public const val INVITE: String = "invite"
+    }
 }
 
 /** A person as contacts show them (never their e-mail). */
@@ -263,7 +343,15 @@ public data class ComposeQuestion(
 public data class Compose(
     /** `message` (subject + text) or `form` (questionnaire). */
     val kind: String,
-    /** Handles: contacts (from the personal workspace) or members (from [from]). */
+    /**
+     * Who receives it: `@handle`s of contacts (from the personal workspace)
+     * or of members (from [from]); e-mails (a contact's verified e-mail, or a
+     * member's membership e-mail); and, from an organization, the built-in
+     * groups `#all`, `#admins` and `#owners` and the organization's own
+     * groups, whole (`#finance`) or from an authority level up
+     * (`#finance>=manager`), opened when sending (never the sender; `#all`
+     * leaves guests out). See [GroupTag].
+     */
     val to: List<String>,
     val title: String,
     val text: String = "",
@@ -273,12 +361,31 @@ public data class Compose(
     /** Verification of the answer: 0 tap, 1 biometrics, 2 authenticator code. */
     val level: Int? = null,
     val timeout: String? = null,
+    /**
+     * Questionnaire: each person also signs the answer with their electronic
+     * signature, on top of [level]. Pro plans and above; otherwise the send
+     * fails with `plan_required` (`details.feature = "e_signature"`).
+     */
+    @SerialName("require_signature") val requireSignature: Boolean = false,
 ) {
     public companion object {
         public const val MESSAGE: String = "message"
         public const val FORM: String = "form"
     }
 }
+
+/** `POST /v0/me/compose/preview`: who a send would reach. */
+@Serializable
+public data class ComposePreview(
+    /** People it goes to. */
+    val count: Int = 0,
+    /** People one send may reach on the plan. */
+    val limit: Int = 0,
+    /** [count] is above [limit]: the send would fail with `too_many_recipients`. */
+    @SerialName("over_limit") val overLimit: Boolean = false,
+    /** Up to 8 of them, to show faces (empty when over the limit). */
+    val people: List<Person> = emptyList(),
+)
 
 @Serializable
 public data class ComposeResult(
@@ -291,7 +398,9 @@ public data class ComposeResult(
     /** The item in [People.sent]. */
     @SerialName("sent_id") val sentId: String? = null,
     val recipients: List<Person> = emptyList(),
-    /** Handles the questionnaire could not go to (partial send). */
+    /** Recipients by e-mail (the e-mail inbox, or a guest invite from an organization). */
+    val emails: List<String> = emptyList(),
+    /** Handles (or e-mails) the send could not go to (partial send). */
     val failed: List<String> = emptyList(),
 )
 
@@ -314,7 +423,9 @@ public data class SentCounts(
 
 @Serializable
 public data class SentRecipient(
-    val person: Person,
+    /** Null for a recipient by e-mail ([email]): the account is never revealed. */
+    val person: Person? = null,
+    val email: String? = null,
     @SerialName("delivered_at") val deliveredAt: String? = null,
     @SerialName("read_at") val readAt: String? = null,
     @SerialName("acknowledged_at") val acknowledgedAt: String? = null,
@@ -336,6 +447,8 @@ public data class SentItem(
     val status: String = "",
     val counts: SentCounts = SentCounts(),
     val recipients: List<SentRecipient> = emptyList(),
+    /** The questionnaire asked each person for their electronic signature. */
+    @SerialName("require_signature") val requireSignature: Boolean = false,
 )
 
 @Serializable
@@ -354,9 +467,13 @@ public data class SentAnswer(
 
 @Serializable
 public data class SentResponse(
-    val person: Person,
+    /** Null for an answer by e-mail ([email]). */
+    val person: Person? = null,
+    val email: String? = null,
     @SerialName("answered_at") val answeredAt: String = "",
     val answers: List<SentAnswer> = emptyList(),
+    /** The signature they applied, when the questionnaire asked for one (with the images). */
+    @SerialName("e_signature") val eSignature: ESignature? = null,
 )
 
 /** `GET /v0/me/sent/{id}`. */
@@ -375,6 +492,8 @@ public data class SentDetail(
     val recipients: List<SentRecipient> = emptyList(),
     val questions: List<Question> = emptyList(),
     val answers: List<SentResponse> = emptyList(),
+    /** The questionnaire asked each person for their electronic signature. */
+    @SerialName("require_signature") val requireSignature: Boolean = false,
 )
 
 /** A questionnaire saved to reuse. */

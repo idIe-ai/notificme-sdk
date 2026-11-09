@@ -336,8 +336,13 @@ class NotificMe(_Base):
         ``max_wait`` (seconds) elapses first.
 
         ``options``: ``to``, ``context``, ``level``, ``severity`` (``"critical"`` may take the
-        person's screen), ``quorum``, ``offline``, ``timeout`` (e.g. ``"30m"``), ``on_timeout``,
-        ``escalate``, ``callback_url``, ``card``.
+        person's screen), ``quorum``, ``decision`` (who decides and the rule, e.g.
+        ``{"by": "#board>=director", "rule": "quorum", "required": 2}``), ``offline``,
+        ``timeout`` (e.g. ``"30m"``), ``on_timeout``, ``escalate`` (e.g.
+        ``[{"after": "30m", "to": "#ceo"}]``), ``callback_url``, ``require_signature`` (the
+        person's electronic signature, in ``AskResult.e_signature``; Pro plans and above),
+        ``card``. ``to`` accepts ``@handle``, member e-mails and groups (``#finance``,
+        ``#finance>=manager``).
         """
         handle = self.create_ask(
             title, questions, idempotency_key=idempotency_key, request_timeout=request_timeout, **options

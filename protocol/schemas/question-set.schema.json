@@ -20,16 +20,89 @@
     },
     "quorum": {
       "type": "object", "required": ["required"], "additionalProperties": false,
+      "description": "Shorthand for decision { rule: \"quorum\", required } among the recipients in to.",
       "properties": { "required": { "type": "integer", "minimum": 2 } }
     },
     "offline": { "enum": ["allowed", "denied"], "default": "allowed" },
     "timeout": { "type": "string", "pattern": "^[0-9]+(s|m|h|d)$" },
     "on_timeout": { "type": "object", "description": "Answers applied when nobody answers in time, by question id." },
-    "escalate": { "type": "array", "items": { "type": "string" } },
+    "decision": { "$ref": "#/$defs/decision" },
+    "escalate": {
+      "type": "array",
+      "maxItems": 5,
+      "description": "Escalation chain: if the question is still open after each step's time, the step's recipients also receive it and may decide (the earlier recipients still can).",
+      "items": {
+        "oneOf": [
+          { "type": "string", "description": "Shorthand for { \"to\": [this], \"after\": half of the timeout }." },
+          { "$ref": "#/$defs/escalation_step" }
+        ]
+      }
+    },
     "callback_url": { "type": "string", "format": "uri", "description": "Webhook que recebe a resposta assinada." },
+    "require_signature": {
+      "type": "boolean",
+      "default": false,
+      "description": "Ask the person to sign the answer with their electronic signature (typed in a cursive style or drawn) and initials, on top of the verification level. The signed reply carries it in e_signature. Pro plans and above."
+    },
     "card": { "$ref": "card.schema.json" }
   },
   "$defs": {
+    "recipients": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 20 }
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Who may decide and which rule closes the question. Without it, anyone in to decides and the first answer closes the question.",
+      "properties": {
+        "by": {
+          "$ref": "#/$defs/recipients",
+          "description": "Who may decide: #group, #group>=authority_level (e.g. #finance>=manager), @handle or a member's e-mail. They also receive the card. Default: everyone in to."
+        },
+        "rule": {
+          "enum": ["any", "quorum", "majority", "unanimous", "each_group"],
+          "default": "any",
+          "description": "any: the first answer closes it. quorum: required approvals. majority: more than half of the eligible people. unanimous: every eligible person. each_group: one approval from each entry of by (four-eyes)."
+        },
+        "required": { "type": "integer", "minimum": 1, "maximum": 1000, "description": "Approvals needed with rule quorum." },
+        "veto": {
+          "type": "boolean",
+          "default": false,
+          "description": "true: a single rejection closes the question as rejected. false: rejections only count; it closes as rejected once approval can no longer be reached."
+        },
+        "question": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "description": "The question whose answer is the vote (yesno, or single with approve_options). Default: the first question."
+        },
+        "approve_options": {
+          "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 12,
+          "description": "With a single-choice vote question: the options that count as approval (the others count as rejection)."
+        },
+        "requested_by": {
+          "type": "string",
+          "description": "The member who made the request (@handle or e-mail). They never approve their own request (segregation of duties)."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "rule": { "const": "quorum" } }, "required": ["rule"] },
+          "then": { "required": ["required"] }
+        }
+      ]
+    },
+    "escalation_step": {
+      "type": "object",
+      "required": ["after", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "after": { "type": "string", "pattern": "^[0-9]+(s|m|h|d)$", "description": "Time since the question was sent." },
+        "to": { "$ref": "#/$defs/recipients", "description": "Who receives it and may decide from then on (#group, #group>=level, @handle or e-mail)." }
+      }
+    },
     "question": {
       "type": "object",
       "required": ["id", "type", "text"],

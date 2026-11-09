@@ -85,11 +85,15 @@ public data class InboxSnapshot(
     val ended: Map<String, QuestionSetStatus> = emptyMap(),
 )
 
-/** The part of a `question_set` change of the feed that says whether it is still open. */
+/**
+ * The part of a `question_set` change of the feed that says whether it is
+ * still open and, with a decision rule, the votes so far.
+ */
 @Serializable
 internal data class QuestionSetChange(
     val id: String = "",
     val status: QuestionSetStatus = QuestionSetStatus.Unknown,
+    val decision: DecisionView? = null,
 )
 
 /**
@@ -167,16 +171,34 @@ public class Inbox(
         }
     }
 
-    /** Answers a question set and drops it from the open list. See [NotificClient.reply]. */
+    /**
+     * Answers a question set and drops it from the open list. A vote that
+     * does not close a question with a decision rule keeps it open, with the
+     * person's vote in [QuestionSet.decision] (they may not vote again). See
+     * [NotificClient.reply].
+     */
     public suspend fun reply(
         questionSet: QuestionSet,
         answers: List<Answer>,
         authMethod: AuthMethod = if (questionSet.level <= 0) AuthMethod.Tap else AuthMethod.Unlock,
         totpCode: String? = null,
         idempotencyKey: String = java.util.UUID.randomUUID().toString(),
+        eSignatureSha256: String? = null,
     ): ReplyAccepted {
-        val accepted = client.reply(questionSet, answers, authMethod, totpCode, idempotencyKey)
-        mutable.update { s -> s.copy(questions = s.questions.filterNot { it.id == questionSet.id }) }
+        val accepted = client.reply(questionSet, answers, authMethod, totpCode, idempotencyKey, eSignatureSha256)
+        val decision = accepted.decision
+        mutable.update { s ->
+            if (!accepted.isClosed && decision != null) {
+                s.copy(
+                    questions = s.questions.map { q ->
+                        if (q.id != questionSet.id) q
+                        else q.copy(decision = decision.afterMyVote(q.decision ?: questionSet.decision), answerable = false, answerableWithTotp = false)
+                    },
+                )
+            } else {
+                s.copy(questions = s.questions.filterNot { it.id == questionSet.id })
+            }
+        }
         guard { pull() }
         return accepted
     }
@@ -240,6 +262,8 @@ public class Inbox(
 
     private suspend fun apply(page: SyncPage) {
         var questionsChanged = false
+        // Votes on open questions (decision rules): shown at once, before the list reloads.
+        val votes = HashMap<String, DecisionView>()
         lock.withLock {
             if (page.reset) byId.clear()
             for (c in page.changes) {
@@ -258,10 +282,12 @@ public class Inbox(
                     SyncEntity.Delivery -> c.data?.let { applyDelivery(it) }
                     SyncEntity.QuestionSet -> {
                         questionsChanged = true
+                        val change = c.data?.let { runCatching { Wire.json.decodeFromJsonElement(QuestionSetChange.serializer(), it) }.getOrNull() }
+                        val id = change?.id?.ifEmpty { c.id } ?: c.id
                         // Answered, ran out or cancelled: keep how it ended for its notification.
-                        c.data?.let { runCatching { Wire.json.decodeFromJsonElement(QuestionSetChange.serializer(), it) }.getOrNull() }
-                            ?.takeIf { it.status != QuestionSetStatus.Open && it.status != QuestionSetStatus.Unknown }
-                            ?.let { ended[it.id.ifEmpty { c.id }] = it.status }
+                        change?.takeIf { it.status != QuestionSetStatus.Open && it.status != QuestionSetStatus.Unknown }
+                            ?.let { ended[id] = it.status }
+                        change?.decision?.takeIf { change.status == QuestionSetStatus.Open }?.let { votes[id] = it }
                     }
                     SyncEntity.AnswerSet -> questionsChanged = true
                     else -> Unit
@@ -269,6 +295,11 @@ public class Inbox(
             }
             if (page.nextCursor > cursor) cursor = page.nextCursor
             publish()
+        }
+        if (votes.isNotEmpty()) {
+            mutable.update { s ->
+                s.copy(questions = s.questions.map { q -> votes[q.id]?.let { d -> q.copy(decision = d.withViewerOf(q.decision)) } ?: q })
+            }
         }
         if (questionsChanged) guard { loadQuestions() }
     }

@@ -97,6 +97,11 @@ public class NotificClient(
     /** Contacts, organization members and sending messages and questionnaires to them. */
     public val people: People = People(this)
 
+    /** Groups (`#finance`) and the authority ladder of the person's organizations. */
+    public val groups: Groups = Groups(this)
+    /** The person's own account: the electronic signature they adopt and apply to answers. */
+    public val account: Account = Account(this)
+
     /** The signed-in person, their workspaces and the current sync cursor. */
     public suspend fun me(): Me = call(HttpMethod.Get, "/v0/me", Me.serializer())
 
@@ -138,6 +143,14 @@ public class NotificClient(
      * [QuestionSet.answerableWithTotp]. Device-key signatures belong to the
      * official app.
      *
+     * When [QuestionSet.requireSignature], pass the hash of the signature
+     * shown to the person ([ESignature.signatureSha256], from
+     * [Account.signature]) as [eSignatureSha256]: the server checks it is the
+     * account's current signature and copies it into the reply. Errors:
+     * `signature_not_adopted` (adopt one with [Account.adoptSignature]),
+     * `signature_required`, `signature_changed` (409: it was changed on
+     * another device; show the current one again).
+     *
      * Safe to retry: the same [idempotencyKey] never creates two replies.
      */
     public suspend fun reply(
@@ -146,6 +159,7 @@ public class NotificClient(
         authMethod: AuthMethod = if (questionSet.level <= 0) AuthMethod.Tap else AuthMethod.Unlock,
         totpCode: String? = null,
         idempotencyKey: String = UUID.randomUUID().toString(),
+        eSignatureSha256: String? = null,
     ): ReplyAccepted {
         val body = ReplyRequest(
             questionSetId = questionSet.id,
@@ -156,6 +170,7 @@ public class NotificClient(
             totpCode = totpCode,
             contentHash = questionSet.contentHash,
             answeredAt = Instant.now().toString(),
+            eSignature = eSignatureSha256?.let(::ESignatureRef),
         )
         return call(
             HttpMethod.Post, "/v0/replies", ReplyAccepted.serializer(),
@@ -466,6 +481,7 @@ internal data class ReplyRequest(
     @SerialName("totp_code") val totpCode: String? = null,
     @SerialName("content_hash") val contentHash: String? = null,
     @SerialName("answered_at") val answeredAt: String? = null,
+    @SerialName("e_signature") val eSignature: ESignatureRef? = null,
 )
 
 @Serializable

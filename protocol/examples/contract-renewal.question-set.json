@@ -1,0 +1,13 @@
+{
+  "version": "0",
+  "to": ["ana"],
+  "title": "Renew the support contract for 2027?",
+  "context": "The renewal keeps the current price and adds weekend coverage. Signing confirms the terms in the [proposal](https://example.com/proposal-2027).",
+  "questions": [
+    { "id": "renew", "type": "yesno", "text": "Do you agree with the renewal terms?" },
+    { "id": "start", "type": "date", "text": "Start date" }
+  ],
+  "level": 1,
+  "require_signature": true,
+  "timeout": "3d"
+}

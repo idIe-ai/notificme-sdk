@@ -223,6 +223,37 @@ def test_ask_long_polls_until_reply(client: NotificMe, server: FakeServer) -> No
     assert r.details["note"].free_text == UntrustedText("Only after 10 pm")
 
 
+def test_ask_require_signature(client: NotificMe, server: FakeServer) -> None:
+    e_signature = {
+        "name": "Ana Souza",
+        "initials": "AS",
+        "method": "drawn",
+        "signature_png": "iVBORw0KGgo=",
+        "signature_sha256": "sha256:" + "a" * 64,
+        "initials_png": "iVBORw0KGgo=",
+        "initials_sha256": "sha256:" + "b" * 64,
+        "consent_version": "esign-2026-11-09",
+        "adopted_at": "2026-11-02T09:12:40Z",
+    }
+    server.reply(201, ask_view("open"))
+    server.reply(200, ask_view("answered", dict(REPLY, e_signature=e_signature)))
+    r = client.ask("Renew the contract?", QUESTIONS, to="ana", require_signature=True)
+    assert server.json(0)["require_signature"] is True
+    assert r.e_signature is not None
+    assert r.e_signature.name == "Ana Souza" and r.e_signature.method == "drawn"
+    assert r.e_signature.style is None
+    assert r.e_signature.signature_sha256 == "sha256:" + "a" * 64
+    assert r.e_signature.adopted_at == "2026-11-02T09:12:40Z"
+
+
+def test_ask_without_signature(client: NotificMe, server: FakeServer) -> None:
+    server.reply(201, ask_view("open"))
+    server.reply(200, ask_view("answered", REPLY))
+    r = client.ask("Deploy?", QUESTIONS)
+    assert "require_signature" not in server.json(0)
+    assert r.e_signature is None
+
+
 def test_ask_single_other_is_untrusted(client: NotificMe, server: FakeServer) -> None:
     reply = dict(REPLY, answers=[{"question_id": "action", "question_text": "?", "free_text": "Wait"}])
     server.reply(201, ask_view("answered", reply))
@@ -402,3 +433,58 @@ def test_delegated_auth_method() -> None:
     )
     r = to_ask_result(reply)
     assert r.answered_by is not None and r.answered_by.auth_method == "delegated"
+
+
+def test_decision_and_escalation_wire():
+    from notificme.wire import ask_to_wire
+
+    body = ask_to_wire(
+        title="Contract 4521",
+        questions=[{"id": "ok", "type": "yesno", "text": "Approve?"}],
+        to="#finance",
+        decision={
+            "by": "#board>=director",
+            "rule": "quorum",
+            "required": 2,
+            "requested_by": "@ana",
+            "veto": None,
+        },
+        escalate=[{"after": "30m", "to": "#ceo"}, "@cfo"],
+    )
+    assert body["to"] == ["#finance"]
+    assert body["decision"] == {
+        "by": ["#board>=director"],
+        "rule": "quorum",
+        "required": 2,
+        "requested_by": "@ana",
+    }
+    assert body["escalate"] == [{"after": "30m", "to": ["#ceo"]}, "@cfo"]
+
+
+def test_reply_closed_by_rule():
+    reply = {
+        "question_set_id": "q1",
+        "version": 1,
+        "status": "rejected",
+        "answers": [{"question_id": "ok", "question_text": "Approve?", "value": False}],
+        "answered_by": {
+            "identity": "bruno@acme.com",
+            "device_id": "d",
+            "level_used": 1,
+            "group": "#board",
+            "authority_level": "director",
+        },
+        "decision": {
+            "rule": "quorum",
+            "required": 2,
+            "eligible": 3,
+            "approvals": 0,
+            "rejections": 2,
+            "outcome": "rejected",
+        },
+        "votes": [{"identity": "ana@acme.com", "approve": False, "answered_at": "2026-11-09T14:30:00Z"}],
+        "signature": {"alg": "Ed25519", "value": "x"},
+    }
+    r = to_ask_result(reply, [{"id": "ok", "type": "yesno", "text": "Approve?"}])
+    assert r.status == "rejected" and r.decision["outcome"] == "rejected" and len(r.votes) == 1
+    assert r.answered_by.group == "#board" and r.answered_by.authority_level == "director"

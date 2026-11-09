@@ -1,0 +1,35 @@
+{
+  "question_set_id": "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a6c",
+  "version": 1,
+  "status": "answered",
+  "answers": [
+    { "question_id": "renew", "question_text": "Do you agree with the renewal terms?", "value": true },
+    { "question_id": "start", "question_text": "Start date", "value": "2027-01-01" }
+  ],
+  "as_text": "Ana Souza answered \"Renew the support contract for 2027?\": Do you agree with the renewal terms? Yes. Start date: 2027-01-01. Signed electronically as Ana Souza.",
+  "answered_by": {
+    "identity": "ana@example.com",
+    "device_id": "019a2b3c-0000-7000-8000-000000000002",
+    "level_used": 1,
+    "auth_method": "unlock"
+  },
+  "answered_at": "2026-11-09T15:20:04Z",
+  "content_hash": "sha256:7b2e4c1a9f3d5e8b0c6a2f4e1d9b7c5a3e1f0d8c6b4a2e0f9d7c5b3a1e9f7d5c",
+  "e_signature": {
+    "name": "Ana Souza",
+    "initials": "AS",
+    "method": "typed",
+    "style": "great-vibes",
+    "signature_png": "iVBORw0KGgoAAAANSUhEUgAAADAAAAAQCAYAAABQrvyxAAAAGUlEQVR4nO3BAQEAAACCIP+vbkhAAQAArwYMEAABYNgddAAAAABJRU5ErkJggg==",
+    "signature_sha256": "sha256:9716ea3fc201f175660cf7353f8125e0c2966eaf33315291383d647ad6bc5acb",
+    "initials_png": "iVBORw0KGgoAAAANSUhEUgAAABgAAAAMCAYAAAB4MH11AAAAEklEQVR4nGNgGAWjYBSMgoEHAASMAAHyjgEHAAAAAElFTkSuQmCC",
+    "initials_sha256": "sha256:5759bac0ca2d85491629db05ae969c834ced70116456e3ed5c7dec2b3812652e",
+    "consent_version": "esign-2026-11-09",
+    "adopted_at": "2026-11-02T09:12:40Z"
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "key_id": "srv-2026-10",
+    "value": "ZXhhbXBsZS1zaWduYXR1cmUtbm90LXZhbGlk"
+  }
+}

@@ -36,6 +36,8 @@ dependencies {
     api(libs.compose.foundation)
     api(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
+    // Check, X and pencil of the answered card (AnsweredCard).
+    implementation(libs.compose.material.icons.core)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.coil.svg)

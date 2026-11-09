@@ -15,4 +15,8 @@
     <string name="nm_unknown_question">This question type isn\'t supported in this app.</string>
     <string name="nm_progress_percent">%1$d%%</string>
     <string name="nm_step_of">Step %1$d of %2$d</string>
+    <!-- Decisão respondida (AnsweredCard). -->
+    <string name="nm_choose_one">Choose one</string>
+    <string name="nm_choose_many">Choose one or more</string>
+    <string name="nm_no_answer">No answer</string>
 </resources>

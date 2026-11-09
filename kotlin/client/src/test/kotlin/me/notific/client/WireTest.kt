@@ -100,4 +100,62 @@ class WireTest {
         assertTrue(!Session("t", "s", "garbage", user).isExpired())
         assertEquals("x", Wire.json.parseToJsonElement("""{"a":"x"}""").jsonObject["a"]!!.jsonPrimitive.content)
     }
+
+    @Test
+    fun questionSetsSayWhenTheyAskForASignature() {
+        assertTrue(Wire.json.decodeFromString(QuestionSet.serializer(), """{"id":"q","require_signature":true}""").requireSignature)
+        assertEquals(false, Wire.json.decodeFromString(QuestionSet.serializer(), """{"id":"q"}""").requireSignature)
+    }
+
+    @Test
+    fun signedReplyCarriesTheSignature() {
+        val reply = Wire.json.decodeFromString(
+            Reply.serializer(),
+            """{"question_set_id":"q","status":"answered","e_signature":{"name":"Ana Souza","initials":"AS","method":"typed","style":"great-vibes","signature_png":"AAEC","signature_sha256":"sha256:x","initials_png":"AwQ=","initials_sha256":"sha256:y","consent_version":"esign-2026-11-09","adopted_at":"2026-11-09T14:03:11Z"}}""",
+        )
+        val e = reply.eSignature!!
+        assertEquals("Ana Souza", e.name)
+        assertEquals(SignatureStyle.GreatVibes, e.style)
+        assertEquals("esign-2026-11-09", e.consentVersion)
+        assertNull(Wire.json.decodeFromString(Reply.serializer(), """{"question_set_id":"q"}""").eSignature)
+    }
+
+    @Test
+    fun unknownSignatureValuesFallBack() {
+        val e = Wire.json.decodeFromString(ESignature.serializer(), """{"name":"A","method":"stylus","style":"comic-sans"}""")
+        assertEquals(SignatureMethod.Unknown, e.method)
+        assertNull(e.style)
+        assertEquals(SignatureStyle.MrDafoe, SignatureStyle.of("mr-dafoe"))
+        assertNull(SignatureStyle.of("nope"))
+        assertEquals(listOf("great-vibes", "dancing-script", "sacramento", "mr-dafoe"), SignatureStyle.entries.map { it.wire })
+    }
+
+    @Test
+    fun signatureHashesAreSha256OfThePng() {
+        // SHA-256 of "abc", the classic test vector.
+        assertEquals("sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", ESignature.sha256Of("abc".toByteArray()))
+        val png = byteArrayOf(-119, 80, 78, 71)
+        val b64 = java.util.Base64.getEncoder().encodeToString(png)
+        val ok = ESignature(signaturePng = b64, signatureSha256 = ESignature.sha256Of(png), initialsPng = b64, initialsSha256 = ESignature.sha256Of(png))
+        assertTrue(ok.hashesMatch())
+        assertTrue(!ok.copy(initialsSha256 = "sha256:00").hashesMatch())
+        assertTrue(!ESignature().hashesMatch())
+        assertEquals(0, ESignature(signaturePng = "not base64!").signatureBytes().size)
+    }
+
+    @Test
+    fun composeAndSentCarryTheSignature() {
+        val wire = Wire.json.parseToJsonElement(
+            Wire.json.encodeToString(Compose.serializer(), Compose(kind = Compose.FORM, to = listOf("@ana"), title = "T", requireSignature = true)),
+        ).jsonObject
+        assertEquals("true", wire["require_signature"]!!.jsonPrimitive.content)
+        val d = Wire.json.decodeFromString(
+            SentDetail.serializer(),
+            """{"id":"s1","kind":"form","require_signature":true,"answers":[{"person":{"id":"u1","handle":"ana"},"answered_at":"2026-11-09T15:00:00Z","answers":[],"e_signature":{"name":"Ana","initials":"A","method":"drawn","signature_png":"AA==","signature_sha256":"sha256:1","initials_png":"AA==","initials_sha256":"sha256:2","adopted_at":"2026-11-09T14:00:00Z"}},{"person":{"id":"u2"},"answers":[]}]}""",
+        )
+        assertTrue(d.requireSignature)
+        assertEquals(SignatureMethod.Drawn, d.answers[0].eSignature?.method)
+        assertNull(d.answers[1].eSignature)
+        assertTrue(Wire.json.decodeFromString(SentItem.serializer(), """{"id":"s1","require_signature":true}""").requireSignature)
+    }
 }

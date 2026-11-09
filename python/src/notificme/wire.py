@@ -16,6 +16,7 @@ from .types import (
     AnsweredBy,
     AskInfo,
     AskResult,
+    ESignature,
     MemberToken,
     MemberUser,
     ReplySignature,
@@ -162,17 +163,26 @@ def ask_to_wire(
     level: Optional[int] = None,
     severity: Optional[str] = None,
     quorum: Optional[int] = None,
+    decision: Optional[Mapping[str, Any]] = None,
     offline: Optional[str] = None,
     timeout: Optional[Duration] = None,
     on_timeout: Optional[Mapping[str, Any]] = None,
-    escalate: Optional[Iterable[str]] = None,
+    escalate: Optional[Iterable[Union[str, Mapping[str, Any]]]] = None,
     callback_url: Optional[str] = None,
+    require_signature: Optional[bool] = None,
     card: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """``ask()`` arguments → ``question-set.schema.json``.
 
     ``severity``: ``"high"`` (default) or ``"critical"`` (the person's app may take
-    the full screen with an alarm until they decide).
+    the full screen with an alarm until they decide). ``require_signature``: ask
+    for the person's electronic signature on top of the level (Pro plans and above).
+
+    ``decision``: who may decide and which rule closes the question, e.g.
+    ``{"by": "#board>=director", "rule": "quorum", "required": 2, "requested_by": "@ana"}``
+    (rules: ``any``, ``quorum``, ``majority``, ``unanimous``, ``each_group``; ``veto``,
+    ``question`` and ``approve_options`` are optional). ``escalate``: steps
+    ``{"after": "30m", "to": "#ceo"}`` (a plain string escalates at half the timeout).
     """
     return compact(
         {
@@ -184,14 +194,29 @@ def ask_to_wire(
             "level": level,
             "severity": severity,
             "quorum": {"required": quorum} if quorum is not None else None,
+            "decision": _decision_to_wire(decision) if decision is not None else None,
             "offline": offline,
             "timeout": duration(timeout),
             "on_timeout": dict(on_timeout) if on_timeout is not None else None,
-            "escalate": list(escalate) if escalate is not None else None,
+            "escalate": [_escalation_to_wire(s) for s in escalate] if escalate is not None else None,
             "callback_url": callback_url,
+            "require_signature": True if require_signature else None,
             "card": dict(card) if card is not None else None,
         }
     )
+
+
+def _decision_to_wire(d: Mapping[str, Any]) -> Dict[str, Any]:
+    out = compact(dict(d))
+    if "by" in out:
+        out["by"] = _list(out["by"])
+    return out
+
+
+def _escalation_to_wire(s: Union[str, Mapping[str, Any]]) -> Any:
+    if isinstance(s, str):
+        return s
+    return compact({"after": duration(s.get("after")), "to": _list(s.get("to"))})
 
 
 def ask_info_from_wire(v: Mapping[str, Any]) -> AskInfo:
@@ -208,6 +233,7 @@ def ask_info_from_wire(v: Mapping[str, Any]) -> AskInfo:
         content_hash=v.get("content_hash"),
         poll_url=v.get("poll_url"),
         reply=v.get("reply"),
+        decision=v.get("decision"),
     )
 
 
@@ -297,6 +323,7 @@ def to_ask_result(reply: Any, questions: Optional[Sequence[Mapping[str, Any]]] =
 
     by = reply.get("answered_by")
     sig = reply.get("signature")
+    es = reply.get("e_signature")
     status = reply.get("status", "")
     return AskResult(
         id=reply.get("question_set_id", ""),
@@ -312,12 +339,30 @@ def to_ask_result(reply: Any, questions: Optional[Sequence[Mapping[str, Any]]] =
             device_id=by.get("device_id", ""),
             level_used=by.get("level_used", 0),
             auth_method=by.get("auth_method"),
+            group=by.get("group"),
+            authority_level=by.get("authority_level"),
         )
         if isinstance(by, Mapping)
         else None,
         answered_at=reply.get("answered_at"),
         content_hash=reply.get("content_hash"),
+        e_signature=ESignature(
+            name=es.get("name", ""),
+            initials=es.get("initials", ""),
+            method=es.get("method", ""),
+            signature_png=es.get("signature_png", ""),
+            signature_sha256=es.get("signature_sha256", ""),
+            initials_png=es.get("initials_png", ""),
+            initials_sha256=es.get("initials_sha256", ""),
+            adopted_at=es.get("adopted_at", ""),
+            style=es.get("style"),
+            consent_version=es.get("consent_version"),
+        )
+        if isinstance(es, Mapping)
+        else None,
         signature=ReplySignature(alg=sig.get("alg", ""), value=sig.get("value", ""), key_id=sig.get("key_id"))
         if isinstance(sig, Mapping)
         else None,
+        decision=reply.get("decision"),
+        votes=reply.get("votes"),
     )

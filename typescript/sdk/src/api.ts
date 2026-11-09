@@ -5,7 +5,7 @@
  * Internal: not exported.
  */
 
-import type { AuthMethod, JsonValue, Level } from "./types";
+import type { AuthMethod, DecisionRule, JsonValue, Level } from "./types";
 
 type Uuid = string;
 /** RFC 3339 timestamp, UTC (e.g. `2026-11-04T12:00:00Z`). */
@@ -27,6 +27,46 @@ export interface WireAnsweredBy {
   device_id: string;
   level_used: Level;
   auth_method?: AuthMethod;
+  group?: string;
+  authority_level?: string;
+}
+
+export interface WireReplyDecision {
+  rule: DecisionRule;
+  required?: number;
+  eligible: number;
+  approvals: number;
+  rejections: number;
+  outcome?: "approved" | "rejected";
+  by?: string[];
+  escalation_step?: number;
+}
+
+export interface WireVote {
+  identity: string;
+  handle?: string;
+  approve: boolean;
+  answered_at: Timestamp;
+  level_used?: Level;
+  auth_method?: AuthMethod;
+  group?: string;
+  authority_level?: string;
+}
+
+/** `decision` of `GET /v0/asks/{id}` (partial state). */
+export interface WireDecisionView {
+  rule: DecisionRule;
+  required: number;
+  eligible: number;
+  approvals: number;
+  rejections: number;
+  pending: number;
+  outcome?: "approved" | "rejected";
+  by?: string[];
+  votes: { handle?: string; display_name: string; approve: boolean; at: Timestamp; group?: string; authority_level?: string }[];
+  escalation_step: number;
+  escalation_steps: number;
+  next_escalation_at?: Timestamp;
 }
 
 export interface WireReplySignature {
@@ -45,7 +85,24 @@ export interface Reply {
   answered_by: WireAnsweredBy;
   answered_at?: Timestamp;
   content_hash?: string;
+  decision?: WireReplyDecision;
+  votes?: WireVote[];
+  e_signature?: WireESignature;
   signature: WireReplySignature;
+}
+
+/** `reply.e_signature` (reply.schema.json). */
+export interface WireESignature {
+  name: string;
+  initials: string;
+  method: "typed" | "drawn";
+  style?: string;
+  signature_png: string;
+  signature_sha256: string;
+  initials_png: string;
+  initials_sha256: string;
+  consent_version?: string;
+  adopted_at: Timestamp;
 }
 
 /** `POST /v0/events` → 202. */
@@ -70,6 +127,10 @@ export interface AskView {
   notification_id?: Uuid;
   content_hash?: string;
   poll_url?: string;
+  /** Decision rule state (votes so far, who decided). */
+  decision?: WireDecisionView;
+  /** The question set asked for the person's electronic signature (only when `true`). */
+  require_signature?: boolean;
   /** Present when `answered` or `timeout`. */
   reply?: Reply;
 }

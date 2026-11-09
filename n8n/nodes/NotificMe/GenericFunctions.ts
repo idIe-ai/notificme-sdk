@@ -170,9 +170,39 @@ export function buildAskBody(ctx: IExecuteFunctions, i: number): IDataObject {
 		offline: options.offline as string | undefined,
 		timeout: options.timeout as string | undefined,
 		on_timeout: onTimeout && Object.keys(onTimeout).length > 0 ? onTimeout : undefined,
-		escalate: splitList(options.escalate),
+		decision: buildDecision(options),
+		escalate: buildEscalation(options),
 		callback_url: options.callbackUrl as string | undefined,
+		require_signature: options.requireSignature === true ? true : undefined,
 	});
+}
+
+/**
+ * The `decision` block (who may decide and which rule closes the ask), or
+ * undefined when none of its options is set: the first answer closes it.
+ */
+export function buildDecision(options: IDataObject): IDataObject | undefined {
+	const rule = String(options.decisionRule ?? '') || 'any';
+	const decision = compact({
+		by: splitList(options.decidedBy),
+		rule: rule === 'any' ? undefined : rule,
+		required: rule === 'quorum' ? Number(options.requiredApprovals ?? 2) : undefined,
+		veto: options.veto === true ? true : undefined,
+		requested_by: String(options.requestedBy ?? '').trim(),
+		approve_options: splitLines(options.approveOptions),
+	});
+	return Object.keys(decision).length > 0 ? decision : undefined;
+}
+
+/**
+ * Escalation: with Escalate After, one step `{ after, to }`; without it, the
+ * plain list (the server escalates at half of the timeout).
+ */
+export function buildEscalation(options: IDataObject): IDataObject[] | string[] | undefined {
+	const to = splitList(options.escalate);
+	if (to.length === 0) return undefined;
+	const after = String(options.escalateAfter ?? '').trim();
+	return after ? [{ after, to }] : to;
 }
 
 /** Builds the body of POST /v0/events from the node parameters. */
@@ -228,10 +258,19 @@ export function replyToOutput(reply: IDataObject): IDataObject {
 		answers,
 	};
 	if (QUESTION_IDS.approval in answers) out.approved = answers[QUESTION_IDS.approval] === true;
+	// With a decision rule, the outcome of the rule decides, not the last vote.
+	const decision = reply.decision as IDataObject | undefined;
+	if (decision && typeof decision.outcome === 'string') {
+		out.approved = decision.outcome === 'approved';
+	}
 	if (Object.keys(freeText).length > 0) out.free_text = freeText;
 	out.as_text = reply.as_text;
 	out.answered_by = reply.answered_by;
 	out.answered_at = reply.answered_at;
+	if (decision) out.decision = decision;
+	if (Array.isArray(reply.votes)) out.votes = reply.votes;
+	// Electronic signature (Require Signature): name, method, PNG images and hashes.
+	if (reply.e_signature) out.e_signature = reply.e_signature;
 	out.reply = reply;
 	return out;
 }

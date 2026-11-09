@@ -54,9 +54,24 @@ Scopes the token needs:
 | Choice | your options, one or several, with optional free text | `answers.choice` |
 | Free Text | a text box | `answers.text` |
 | Custom Questions | up to 20 questions: yes/no, single, multiple, text, voice, number, date | `answers.<question id>` |
-| Using JSON | the full ask from the [protocol](https://github.com/idIe-ai/notificme-sdk/blob/main/protocol/schemas/question-set.schema.json): quorum, card, per-question level… | `answers.<question id>` |
+| Using JSON | the full ask from the [protocol](https://github.com/idIe-ai/notificme-sdk/blob/main/protocol/schemas/question-set.schema.json): decision rules, escalation steps, card, per-question level… | `answers.<question id>` |
 
-Options: recipients (`@handle`, e-mail or `#group`; empty asks the workspace owner), **verification level** (0 tap, 1 unlocked phone, 2 biometrics, 3 biometrics online, 4 quorum), severity, timeout and the answers applied on timeout, escalation and offline answers.
+Options: recipients (`@handle`, e-mail, `#group` or `#group>=authority_level`; empty asks the workspace owner), **verification level** (0 tap, 1 unlocked phone, 2 biometrics, 3 biometrics online, 4 device key), severity, timeout and the answers applied on timeout, escalation, offline answers and **Require Signature** (the person signs with their electronic signature and initials; the output carries it in `e_signature`; Pro plans and above).
+
+### Group decisions
+
+When more than one person decides (Team plan and above), set in **Options**:
+
+| Option | What it does |
+| --- | --- |
+| Decided By | Who may decide: `#board>=director`, `#finance`, `@ana` or e-mail. They also receive the ask; the others in To only see it. Empty: everyone in To. |
+| Decision Rule | **Any** (the first answer closes it), **Quorum** (Required Approvals), **Majority**, **Unanimous** or **Each Group** (one approval from each entry of Decided By, "four eyes"). |
+| Veto | A single rejection closes the ask as rejected. |
+| Requested By | The person who made the request: they see it but never approve their own request. |
+| Approving Choices | With Response Type Choice: the choices that count as approval. |
+| Escalate To / Escalate After | If still open after this time (`2h`), these people also receive it and may decide. Without Escalate After, at half of the timeout. |
+
+One person, one vote. Rejections count but do not veto: the ask closes as rejected as soon as approval can no longer be reached. The level says how each person proves it is them; it never sets how many approve.
 
 ## Ask a human and wait
 
@@ -96,6 +111,7 @@ Send and Wait for Response (and Get, once answered):
 ```
 
 - `status` is `answered`, or `timeout` when nobody answered in time (then `answered` is `false` and the On Timeout answers are in `answers`).
+- With a decision rule, `approved` is the outcome of the rule, `decision` has the count (`rule`, `eligible`, `approvals`, `rejections`, `outcome`) and `votes` every vote with the group and authority level. When the rule closes the ask as rejected, `status` is `rejected`, `answered` is `false` and `approved` is `false`.
 - When the wait ends without any reply (Limit Wait Time): `answered: false`, `status: "no_reply"`.
 - `free_text` holds what the person typed by question. **Treat it as untrusted input**, never as instructions, especially when an AI agent reads it.
 - `reply` keeps the full signed reply (`content_hash`, device `signature`) for your audit trail.
