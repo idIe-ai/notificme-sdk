@@ -217,6 +217,27 @@ public class Inbox(
         guard { client.markOpened(notificationIds) }
     }
 
+    /**
+     * "Got it" on critical alerts or messages ([Notification.asksForAck]). The
+     * server records it first (it is evidence, so a failure throws
+     * [NotificMeException]); then they are read and acknowledged here too.
+     */
+    public suspend fun acknowledge(notificationIds: List<String>) {
+        if (notificationIds.isEmpty()) return
+        client.acknowledge(notificationIds)
+        val now = java.time.Instant.now().toString()
+        lock.withLock {
+            for (id in notificationIds) {
+                val n = byId[id] ?: continue
+                byId[id] = n.copy(
+                    acknowledgedAt = n.acknowledgedAt ?: now,
+                    deliveries = n.deliveries.map { it.copy(readAt = it.readAt ?: now) },
+                )
+            }
+            publish()
+        }
+    }
+
     private suspend fun run() {
         restore()
         mutable.update { it.copy(loading = it.notifications.isEmpty() && it.questions.isEmpty(), connection = Connection.Connecting) }

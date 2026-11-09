@@ -3,6 +3,7 @@ package me.notific.client.android
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -17,7 +18,7 @@ public object NotificAndroid {
 
     /**
      * A [NotificClient] identified as your app (`User-Agent`) and as
-     * `android` in reactions.
+     * `android` in reactions (`wearos` on a watch).
      */
     public fun client(
         context: Context,
@@ -26,23 +27,43 @@ public object NotificAndroid {
     ): NotificClient {
         val app = context.applicationContext
         val agent = "${app.packageName}/${versionName(app)} notificme-kotlin/${NotificClient.VERSION} (Android ${Build.VERSION.RELEASE})"
-        return NotificClient(tokens, NotificClient.Config(baseUrl = baseUrl, userAgent = agent, platform = "android"))
+        return NotificClient(tokens, NotificClient.Config(baseUrl = baseUrl, userAgent = agent, platform = if (isWatch(app)) PLATFORM_WEAR_OS else "android"))
     }
 
-    /** This device, sent when signing in so the person can see and revoke it. */
+    /**
+     * This device, sent when signing in so the person can see and revoke it.
+     * A watch is `wearos`, named as the person named it ("Galaxy Watch4 (ECQA)").
+     */
     public fun device(context: Context, pushToken: String? = null): DeviceInfo {
         val app = context.applicationContext
         val maker = Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
         val model = if (Build.MODEL.startsWith(Build.MANUFACTURER, ignoreCase = true)) Build.MODEL else "$maker ${Build.MODEL}"
+        val watch = isWatch(app)
+        val name = if (watch) watchName(app) ?: model else model
         return DeviceInfo(
-            name = model,
-            platform = "android",
+            name = name,
+            platform = if (watch) PLATFORM_WEAR_OS else "android",
             pushProvider = pushToken?.let { "fcm" },
             pushToken = pushToken,
             appVersion = versionName(app),
             osVersion = "Android ${Build.VERSION.RELEASE}",
         )
     }
+
+    /**
+     * The name the person gave this watch, or null when `DEVICE_NAME` holds
+     * only the model code (a Galaxy Watch: its name is the Bluetooth one,
+     * which `client-wear` reads as `WatchLinkClient.localName`).
+     */
+    public fun watchName(context: Context): String? =
+        Settings.Global.getString(context.applicationContext.contentResolver, Settings.Global.DEVICE_NAME)
+            ?.trim()?.takeIf { it.isNotEmpty() && !it.equals(Build.MODEL, ignoreCase = true) }
+
+    /** Platform of a watch in `/v0/devices`. */
+    public const val PLATFORM_WEAR_OS: String = "wearos"
+
+    /** A Wear OS watch. */
+    public fun isWatch(context: Context): Boolean = context.packageManager.hasSystemFeature(PackageManager.FEATURE_WATCH)
 
     private fun versionName(context: Context): String = try {
         val pm = context.packageManager

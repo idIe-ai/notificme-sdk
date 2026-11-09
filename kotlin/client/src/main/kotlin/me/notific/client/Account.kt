@@ -30,7 +30,7 @@ public data class Session(
 @Serializable
 public data class DeviceInfo(
     val name: String? = null,
-    /** `android`, `ios`, `web` or `other`. */
+    /** `android`, `ios`, `web`, `wearos` or `other`. */
     val platform: String = "android",
     /** `fcm` or `apns`. */
     @SerialName("push_provider") val pushProvider: String? = null,

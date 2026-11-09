@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nmw_yes">Yes</string>
+    <string name="nmw_no">No</string>
+    <string name="nmw_optional">Optional</string>
+    <string name="nmw_speak">Speak your answer</string>
+    <string name="nmw_speak_again">Speak again</string>
+    <string name="nmw_other_spoken">Other…</string>
+    <string name="nmw_say_a_number">Say a number</string>
+    <string name="nmw_now">now</string>
+    <string name="nmw_minutes">%1$d min</string>
+    <string name="nmw_hours">%1$d h</string>
+    <plurals name="nmw_more_rows">
+        <item quantity="one">+%1$d more</item>
+        <item quantity="other">+%1$d more</item>
+    </plurals>
+    <string name="nmw_percent">%1$d%%</string>
+    <string name="nmw_step_of">Step %1$d of %2$d</string>
+    <string name="nmw_badge_decision">Decision</string>
+    <string name="nmw_badge_on_phone">Answer on phone</string>
+    <string name="nmw_blocker_closed">This decision is closed.</string>
+    <string name="nmw_blocker_not_eligible">You can follow this decision, but not vote on it.</string>
+    <string name="nmw_blocker_question_type">It has questions the watch can\'t show.</string>
+    <string name="nmw_blocker_free_text">It needs a typed answer.</string>
+    <string name="nmw_blocker_level">It needs more than a tap to confirm.</string>
+    <string name="nmw_blocker_signature">It needs your electronic signature.</string>
+</resources>

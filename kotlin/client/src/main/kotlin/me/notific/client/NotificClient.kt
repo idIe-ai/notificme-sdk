@@ -192,6 +192,19 @@ public class NotificClient(
     /** The person dismissed these notifications. */
     public suspend fun dismiss(notificationIds: List<String>): Unit = react(now(ReactionKind.Dismissed, notificationIds))
 
+    /**
+     * "Got it" on critical alerts or messages ([Notification.asksForAck]):
+     * read, plus an action reaction [ACTION_ACKNOWLEDGED]. The server records
+     * who, the device, the session and both clocks in the evidence trail and
+     * sets [Notification.acknowledgedAt] on every device; the sender of a
+     * message sees it in Sent.
+     */
+    public suspend fun acknowledge(notificationIds: List<String>) {
+        if (notificationIds.isEmpty()) return
+        val read = now(ReactionKind.Opened, notificationIds)
+        react(read + now(ReactionKind.Action, notificationIds).map { it.copy(action = ACTION_ACKNOWLEDGED) })
+    }
+
     // ------------------------------------------------------------- devices
 
     /** The person's devices; revoked ones only with [includeRevoked]. */
@@ -217,6 +230,22 @@ public class NotificClient(
     public suspend fun revokeDevice(id: String) {
         call(HttpMethod.Delete, "/v0/devices/${id.encodePath()}", JsonElement.serializer())
     }
+
+    /**
+     * A one-time code (2 minutes, once) that links another device of the
+     * person, such as their watch: hand it over (the Wear OS Data Layer) and
+     * the other device calls [Auth.linkDevice]. Not for a company's
+     * delegated session (403).
+     */
+    public suspend fun createDeviceLinkCode(): DeviceLinkCode =
+        call(HttpMethod.Post, "/v0/devices/link-codes", DeviceLinkCode.serializer())
+
+    /** Approves the code a new device shows ([Auth.startDeviceLink]); `invalid_code` (404) when wrong or expired. */
+    public suspend fun approveDeviceLink(userCode: String): LinkedDevice =
+        call(
+            HttpMethod.Post, "/v0/devices/link-codes/approve", LinkedDeviceResponse.serializer(),
+            body = buildJsonObject { put("user_code", userCode.trim()) },
+        ).device
 
     /** Sends a test push to the person's devices that have a push token. */
     public suspend fun pushTest(): PushTestResult = call(HttpMethod.Post, "/v0/push/test", PushTestResult.serializer())
@@ -374,6 +403,9 @@ public class NotificClient(
     public companion object {
         public const val DEFAULT_BASE_URL: String = "https://api.notific.me"
         public const val VERSION: String = "0.1.0"
+
+        /** The action of a "got it" reaction ([acknowledge]). */
+        public const val ACTION_ACKNOWLEDGED: String = "acknowledged"
     }
 }
 
@@ -410,6 +442,39 @@ public class Auth internal constructor(private val client: NotificClient) {
         )
         return (result as? SignInResult.SignedIn)?.session
             ?: throw NotificMeException("invalid_response", "Sign-up did not return a session")
+    }
+
+    /**
+     * Exchanges a code from the person's signed-in device
+     * ([NotificClient.createDeviceLinkCode]) for a session of this device,
+     * registered as [device] (a watch: platform `wearos`). `invalid_link`
+     * (401) when it expired or was used.
+     */
+    public suspend fun linkDevice(code: String, device: DeviceInfo, locale: String? = null): Session {
+        val result = signIn("/v0/auth/device-link", obj("code" to code.trim(), "locale" to locale, "device" to encodeDevice(device)))
+        return (result as? SignInResult.SignedIn)?.session
+            ?: throw NotificMeException("invalid_response", "Device link did not return a session")
+    }
+
+    /** Plan B: a code for this device to show; the person approves it elsewhere ([pollDeviceLink]). */
+    public suspend fun startDeviceLink(device: DeviceInfo, locale: String? = null): DeviceLinkStart = client.call(
+        HttpMethod.Post, "/v0/auth/device-link/start", DeviceLinkStart.serializer(),
+        body = obj("locale" to locale, "device" to encodeDevice(device)), auth = false,
+    )
+
+    /** Whether the code of [startDeviceLink] was approved; `invalid_link` (401) once it expired. */
+    public suspend fun pollDeviceLink(pollToken: String): DeviceLinkPoll {
+        val raw = client.call(
+            HttpMethod.Post, "/v0/auth/device-link/poll", JsonElement.serializer(),
+            body = obj("poll_token" to pollToken), auth = false, retry = true,
+        )
+        val o = raw as? JsonObject ?: throw NotificMeException("invalid_response", "Expected an object")
+        return if (o["status"]?.jsonPrimitive?.contentOrNull == "pending") {
+            val p = Wire.json.decodeFromJsonElement(PendingLink.serializer(), o)
+            DeviceLinkPoll.Pending(p.expiresAt, p.interval)
+        } else {
+            DeviceLinkPoll.Linked(Wire.json.decodeFromJsonElement(Session.serializer(), o))
+        }
     }
 
     /** Ends the session on the server. Clear it locally too. */

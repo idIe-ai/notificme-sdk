@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nmw_yes">Sim</string>
+    <string name="nmw_no">Não</string>
+    <string name="nmw_optional">Opcional</string>
+    <string name="nmw_speak">Fale a resposta</string>
+    <string name="nmw_speak_again">Falar de novo</string>
+    <string name="nmw_other_spoken">Outra…</string>
+    <string name="nmw_say_a_number">Diga um número</string>
+    <string name="nmw_now">agora</string>
+    <string name="nmw_minutes">%1$d min</string>
+    <string name="nmw_hours">%1$d h</string>
+    <plurals name="nmw_more_rows">
+        <item quantity="one">+%1$d</item>
+        <item quantity="many">+%1$d</item>
+        <item quantity="other">+%1$d</item>
+    </plurals>
+    <string name="nmw_percent">%1$d%%</string>
+    <string name="nmw_step_of">Etapa %1$d de %2$d</string>
+    <string name="nmw_badge_decision">Decisão</string>
+    <string name="nmw_badge_on_phone">Responda no celular</string>
+    <string name="nmw_blocker_closed">Esta decisão foi encerrada.</string>
+    <string name="nmw_blocker_not_eligible">Você acompanha esta decisão, mas não vota nela.</string>
+    <string name="nmw_blocker_question_type">Tem perguntas que o relógio não mostra.</string>
+    <string name="nmw_blocker_free_text">Pede uma resposta escrita.</string>
+    <string name="nmw_blocker_level">Pede mais que um toque para confirmar.</string>
+    <string name="nmw_blocker_signature">Pede a sua assinatura eletrônica.</string>
+</resources>

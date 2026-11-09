@@ -59,6 +59,20 @@ public data class Notification(
         get() = if (weakTitle) "" else summary?.takeIf { it != title }.orEmpty()
 
     private val weakTitle: Boolean get() = title.isNullOrBlank() || title == source || title == type
+
+    /**
+     * Waiting for the person's "got it" ([NotificClient.acknowledge]): an open
+     * critical alert that is not a decision, or a message from a person, not
+     * acknowledged on any of their devices yet.
+     */
+    public val asksForAck: Boolean
+        get() = acknowledgedAt == null && questionSetId == null &&
+            ((severity == Severity.Critical && closedAt == null) || type == TYPE_MESSAGE)
+
+    public companion object {
+        /** [type] of a message one person sent to another (Compose). */
+        public const val TYPE_MESSAGE: String = "message"
+    }
 }
 
 @Serializable

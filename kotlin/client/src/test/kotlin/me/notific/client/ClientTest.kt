@@ -169,6 +169,28 @@ class ClientTest {
     }
 
     @Test
+    fun acknowledgeIsAnActionReactionThatAlsoReads() = runBlocking<Unit> {
+        val c = client { json("""{"reactions":[]}""") }
+        c.acknowledge(listOf("n1"))
+        val reactions = requests.single().bodyJson()["reactions"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(listOf("opened", "action"), reactions.map { it["kind"]!!.jsonPrimitive.content })
+        assertEquals("acknowledged", reactions[1]["action"]!!.jsonPrimitive.content)
+        assertEquals("n1", reactions[1]["notification_id"]!!.jsonPrimitive.content)
+        assertEquals("android", reactions[1]["platform"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun whatAsksForAck() {
+        val critical = Notification(id = "c", severity = Severity.Critical)
+        assertEquals(true, critical.asksForAck)
+        assertEquals(false, critical.copy(acknowledgedAt = "2026-11-09T19:00:00Z").asksForAck)
+        assertEquals(false, critical.copy(closedAt = "2026-11-09T19:00:00Z").asksForAck)
+        assertEquals(false, critical.copy(questionSetId = "q").asksForAck)
+        assertEquals(false, Notification(id = "h", severity = Severity.High).asksForAck)
+        assertEquals(true, Notification(id = "m", type = Notification.TYPE_MESSAGE).asksForAck)
+    }
+
+    @Test
     fun signInByCode() = runBlocking<Unit> {
         val c = client(tokens = null) { req ->
             when (req.url.encodedPath) {
@@ -191,6 +213,40 @@ class ClientTest {
 
         val signup = assertIs<SignInResult.SignupRequired>(c.auth.verify("new@acme.com", "123456"))
         assertEquals("new", signup.suggestedHandle)
+    }
+
+    @Test
+    fun linkingAWatch() = runBlocking<Unit> {
+        val session = """{"status":"authenticated","token":"nm_ses_w","token_type":"Bearer","session_id":"s2","expires_at":"2026-12-09T12:00:00Z","user":{"id":"u1","handle":"jimmy"},"device":{"id":"d2","name":"Galaxy Watch4","platform":"wearos"}}"""
+        var polls = 0
+        val c = client { req ->
+            when (req.url.encodedPath) {
+                "/v0/devices/link-codes" -> json("""{"code":"nm_dl_abc","expires_at":"2026-11-09T20:02:00Z"}""", HttpStatusCode.Created)
+                "/v0/devices/link-codes/approve" -> json("""{"device":{"name":"Galaxy Watch4","platform":"wearos"}}""")
+                "/v0/auth/device-link" -> json(session)
+                "/v0/auth/device-link/start" -> json("""{"user_code":"ABCD-EFGH","poll_token":"nm_dlp_x","expires_at":"2026-11-09T20:02:00Z","interval":5}""", HttpStatusCode.Created)
+                "/v0/auth/device-link/poll" -> if (polls++ == 0) json("""{"status":"pending","expires_at":"2026-11-09T20:02:00Z","interval":5}""", HttpStatusCode.Accepted) else json(session)
+                else -> json("{}", HttpStatusCode.NotFound)
+            }
+        }
+        // The phone asks for a code; the watch exchanges it (without a token) for its own session.
+        assertEquals("nm_dl_abc", c.createDeviceLinkCode().code)
+        val watch = DeviceInfo(name = "Galaxy Watch4", platform = "wearos")
+        val s = c.auth.linkDevice("nm_dl_abc", watch)
+        assertEquals("nm_ses_w", s.token)
+        assertEquals("wearos", s.device?.platform)
+        val link = requests[1]
+        assertNull(link.headers[HttpHeaders.Authorization])
+        assertEquals("nm_dl_abc", link.bodyJson()["code"]!!.jsonPrimitive.content)
+        assertEquals("wearos", link.bodyJson()["device"]!!.jsonObject["platform"]!!.jsonPrimitive.content)
+
+        // Plan B: the watch shows a code, the phone approves, the watch polls.
+        val start = c.auth.startDeviceLink(watch)
+        assertEquals("ABCD-EFGH", start.userCode)
+        assertIs<DeviceLinkPoll.Pending>(c.auth.pollDeviceLink(start.pollToken))
+        assertEquals("Galaxy Watch4", c.approveDeviceLink(" ABCD-EFGH ").name)
+        assertEquals("ABCD-EFGH", requests.last().bodyJson()["user_code"]!!.jsonPrimitive.content)
+        assertEquals("nm_ses_w", assertIs<DeviceLinkPoll.Linked>(c.auth.pollDeviceLink(start.pollToken)).session.token)
     }
 
     @Test

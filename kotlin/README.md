@@ -7,6 +7,8 @@ Libraries to show a person's notific.me inbox and answer decisions **inside your
 | [`client/`](client/) | Plain Kotlin client (JVM and Android): sign-in, inbox sync, realtime feed, question sets, replies, reactions | `me.notific:client` *(not published yet)* |
 | [`client-android/`](client-android/) | Android helpers: session encrypted with the Android Keystore, device info, realtime only while the app is in the foreground | `me.notific:client-android` *(not published yet)* |
 | [`cards/`](cards/) | Jetpack Compose renderer for the 10 card blocks and the 7 question types | used from this build |
+| [`client-wear/`](client-wear/) | Wear OS: the phone app links its watch app with one-time codes over the Data Layer, forwards what arrives and syncs "got it" both ways | used from this build |
+| [`cards-wear/`](cards-wear/) | Compose for Wear OS renderer: inbox rows, card blocks on a small round screen, and the questions a watch answers (a tap, or the answer spoken) | used from this build |
 | [`sample/`](sample/) | Reference app (Compose): demo inbox offline, e-mail sign-in, person tokens | never published to a store |
 
 The client uses a **person token**, never a service token. There are two ways to get one:
@@ -99,6 +101,48 @@ inbox.reply(questionSet, answers.toAnswers(), eSignatureSha256 = signature.signa
 // The signed reply carries it: reply.eSignature (images and hashes; hashesMatch() rechecks them).
 ```
 
+### Wear OS
+
+A watch is a device of the person with a session of its own (platform `wearos`), linked with a one-time code (2 minutes, once) that the phone app hands over on the Data Layer (same package name and signing key; the Data Layer connects nothing else). The watch answers up to level 1; the server refuses more from a watch.
+
+```kotlin
+// Phone: answer the watch's link request with a code per account (a MESSAGE_RECEIVED service).
+class WatchService : PhoneBridgeService() {
+    override suspend fun linkCodes(nodeId: String) = listOf(
+        client.createDeviceLinkCode().let { LinkCode(accountId = "main", baseUrl = NotificClient.DEFAULT_BASE_URL, code = it.code) },
+    )
+}
+PhoneLink(context).relay(listOf(item))   // what arrived: id, severity, a short summary (the watch never polls)
+PhoneLink(context).handled(Handled("main", notificationId, Handled.Kind.Acknowledged))   // stop ringing there
+
+// Watch: ask the phone, then exchange the code for a session of the watch itself.
+WatchLinkClient(context).requestLink()   // codes arrive in PhoneEventsService.onLinkCodes
+val session = NotificAndroid.client(context, null, code.baseUrl).auth.linkDevice(code.code, NotificAndroid.device(context))
+val tokens = SessionTokens(KeystoreSessionStorage(context, "watch.${code.accountId}")).apply { set(session) }
+
+// No phone nearby (plan B): show start.userCode; the person approves it with client.approveDeviceLink(code).
+val start = client.auth.startDeviceLink(NotificAndroid.device(context))
+when (val r = client.auth.pollDeviceLink(start.pollToken)) { is DeviceLinkPoll.Linked -> tokens.set(r.session); else -> Unit }
+```
+
+Each side declares its capability in its app's `res/values/wear.xml` (`notificme_phone` on the phone, `notificme_watch` on the watch); the watch extends `PhoneEventsService` (link codes, relay, handled) and the phone `PhoneBridgeService`. A critical alert takes the watch screen when the phone opens it (`PhoneLink.openOnWatch(WatchLink.screenUri("alert", account, id))`): Galaxy watches replace an app's full-screen notification with their own screen, and an app can't start its screen from the background. Draw it with `cards-wear`:
+
+```kotlin
+val support = questionSet.watchSupport(maxLevel = 1, dictation = true, maxOptions = 4)   // why not, when it can't: support.main
+val answers = rememberWearAnswerState(questionSet, dictation = true, maxOptions = 4)
+ScreenScaffold(scrollState = listState, edgeButton = {
+    EdgeButton(onClick = { scope.launch { inbox.reply(questionSet, answers.toAnswers()) } }, enabled = answers.isComplete) { Text("Send") }
+}) { padding ->
+    TransformingLazyColumn(state = listState, contentPadding = padding) {
+        for (block in questionSet.card?.watchBlocks().orEmpty()) item { WearBlock(block) }
+        for (q in answers.questions) wearQuestionItems(q, answers, spec, onSpeak = { q -> listen(q) })
+    }
+}
+// listen(q): start the speech recognizer (RecognizerIntent) and hand the text back with answers.setSpoken(q.id, text).
+```
+
+A watch answers `yesno` and `single` (up to `maxOptions` options) with a tap. With dictation, `text` and `voice` take the transcription, `number` the number said (read the way the watch's language writes it) and a `single` with `allow_other` a spoken "Other…". `multi`, `date`, many options, higher levels and electronic signatures go to the phone. "Got it" on critical alerts and messages: `inbox.acknowledge(ids)` (`Notification.asksForAck`).
+
 ### What you get
 
 - **Tolerant to newer servers.** Unknown card blocks arrive as `Block.Unknown`, unknown question types as `QuestionType.Unknown`, unknown fields are ignored.
@@ -134,7 +178,7 @@ adb shell am start -n me.notific.sample/.MainActivity --es nm.baseUrl http://127
 Open this folder in Android Studio, or use the wrapper (JDK 17+; Android SDK with API 37):
 
 ```sh
-./gradlew :client:test :cards:testDebugUnitTest :sample:assembleDebug
+./gradlew :client:test :cards:testDebugUnitTest :client-wear:testDebugUnitTest :cards-wear:testDebugUnitTest :sample:assembleDebug
 ```
 
 The client tests read the shared fixtures in `../protocol/examples`.
