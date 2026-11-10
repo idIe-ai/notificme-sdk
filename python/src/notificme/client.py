@@ -336,7 +336,8 @@ class NotificMe(_Base):
         ``max_wait`` (seconds) elapses first.
 
         ``options``: ``to``, ``context``, ``level``, ``severity`` (``"critical"`` may take the
-        person's screen), ``quorum``, ``decision`` (who decides and the rule, e.g.
+        person's screen), ``locale`` (the language of ``as_text``: ``"en"`` by default,
+        ``"pt-BR"`` or ``"es"``), ``quorum``, ``decision`` (who decides and the rule, e.g.
         ``{"by": "#board>=director", "rule": "quorum", "required": 2}``), ``offline``,
         ``timeout`` (e.g. ``"30m"``), ``on_timeout``, ``escalate`` (e.g.
         ``[{"after": "30m", "to": "#ceo"}]``), ``callback_url``, ``require_signature`` (the

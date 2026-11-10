@@ -2,6 +2,8 @@
 
 Libraries to show a person's notific.me inbox and answer decisions **inside your own app**, plus a reference app that uses them.
 
+> **Early access.** The hosted service is opening in waves. To get a workspace and a service token, [join the list at notific.me](https://notific.me/?src=readme-kotlin).
+
 | Module | What it is | Coordinates |
 | --- | --- | --- |
 | [`client/`](client/) | Plain Kotlin client (JVM and Android): sign-in, inbox sync, realtime feed, question sets, replies, reactions | `me.notific:client` *(not published yet)* |

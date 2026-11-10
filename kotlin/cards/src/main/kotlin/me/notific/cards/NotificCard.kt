@@ -17,7 +17,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +32,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -39,6 +45,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -47,13 +54,18 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import coil3.ImageLoader
@@ -288,34 +300,143 @@ private fun ChartBlock(block: Block.Chart, accent: Color?) {
     }
 }
 
+private val TableCellPadding = 8.dp
+private val TableEdgePadding = 4.dp
+private val TableRowGap = 8.dp
+
+/** A text column never gets narrower than this while the table still fits. */
+private val TableMinTextColumn = 72.dp
+
+/** In a table that scrolls, a text column wraps past this width. */
+private val TableMaxTextColumn = 220.dp
+
+private val TableFade = 28.dp
+
+/**
+ * The `table` block. Columns of numbers are right-aligned and never wrap;
+ * text columns wrap. When the columns cannot fit even with the text wrapped,
+ * the table scrolls sideways and fades at the edge that has more to show.
+ *
+ * Column widths come from the drawn cells themselves (their intrinsic
+ * widths: same style, weight, font and padding), so a width is never a few
+ * pixels short of its text.
+ */
 @Composable
 private fun TableBlock(block: Block.Table) {
     val border = MaterialTheme.colorScheme.outlineVariant
-    Box(
+    val headerStyle = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+    val cellStyle = MaterialTheme.typography.bodySmall
+    val columns = block.columns.size
+    if (columns == 0) return
+    val texts = remember(block) {
+        block.rows.map { row -> List(columns) { c -> row.getOrNull(c)?.takeIf { it !is JsonNull }?.let(::formatValue) ?: "—" } }
+    }
+    val numeric = remember(block) { numericColumns(columns, block.rows) }
+    BoxWithConstraints(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .border(1.dp, border, RoundedCornerShape(8.dp))
-            .horizontalScroll(rememberScrollState()),
+            .border(1.dp, border, RoundedCornerShape(8.dp)),
     ) {
-        Row(Modifier.padding(horizontal = 4.dp)) {
-            block.columns.forEachIndexed { c, name ->
-                Column(Modifier.widthIn(min = 72.dp, max = 220.dp).padding(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(name, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    for (row in block.rows) {
-                        val cell = row.getOrNull(c)
-                        Text(
-                            if (cell == null || cell is JsonNull) "—" else formatValue(cell),
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
+        val available = constraints.maxWidth - with(LocalDensity.current) { TableEdgePadding.roundToPx() * 2 }
+        val scroll = rememberScrollState()
+        Box(
+            Modifier
+                .fadingEdges(scroll, TableFade)
+                .horizontalScroll(scroll)
+                .padding(horizontal = TableEdgePadding, vertical = 8.dp),
+        ) {
+            TableGrid(columns, numeric, available) {
+                block.columns.forEachIndexed { c, name -> TableCell(name, headerStyle, numeric[c], header = true) }
+                for (row in texts) row.forEachIndexed { c, text -> TableCell(text, cellStyle, numeric[c], header = false) }
             }
         }
     }
 }
+
+@Composable
+private fun TableCell(text: String, style: TextStyle, numeric: Boolean, header: Boolean) {
+    Text(
+        text,
+        style = style,
+        textAlign = if (numeric) TextAlign.End else TextAlign.Start,
+        // A number keeps its natural width, so one line always holds it.
+        maxLines = if (numeric) 1 else if (header) 3 else 4,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(horizontal = TableCellPadding),
+    )
+}
+
+/**
+ * Lays the cells (header row first, row by row, [columns] per row) out in a
+ * grid: each column as wide as [planTable] says for [available] pixels,
+ * each row as tall as its tallest cell. Inside a horizontal scroll the
+ * incoming width is unbounded, hence [available] from outside.
+ */
+@Composable
+private fun TableGrid(columns: Int, numeric: List<Boolean>, available: Int, content: @Composable () -> Unit) {
+    Layout(content) { measurables, _ ->
+        val rows = measurables.size / columns
+        val natural = IntArray(columns)
+        val minWord = IntArray(columns)
+        measurables.forEachIndexed { i, m ->
+            val c = i % columns
+            natural[c] = maxOf(natural[c], m.maxIntrinsicWidth(Constraints.Infinity))
+            if (!numeric[c]) minWord[c] = maxOf(minWord[c], m.minIntrinsicWidth(Constraints.Infinity))
+        }
+        val pad = TableCellPadding.roundToPx() * 2
+        val plan = planTable(
+            natural = natural.toList(),
+            flexible = numeric.map { !it },
+            available = available,
+            minFlex = TableMinTextColumn.roundToPx() + pad,
+            maxFlex = TableMaxTextColumn.roundToPx() + pad,
+            minWord = minWord.toList(),
+        )
+        val placeables = measurables.mapIndexed { i, m -> m.measure(Constraints.fixedWidth(plan.widths[i % columns])) }
+        val gap = TableRowGap.roundToPx()
+        val heights = List(rows) { r -> (0 until columns).maxOf { c -> placeables[r * columns + c].height } }
+        val height = heights.sum() + gap * (rows - 1).coerceAtLeast(0)
+        layout(plan.widths.sum(), height) {
+            var y = 0
+            for (r in 0 until rows) {
+                var x = 0
+                for (c in 0 until columns) {
+                    placeables[r * columns + c].placeRelative(x, y)
+                    x += plan.widths[c]
+                }
+                y += heights[r] + gap
+            }
+        }
+    }
+}
+
+
+/**
+ * Fades the content out at a side that can still scroll, so a cut-off
+ * column reads as "more this way" instead of as missing.
+ */
+private fun Modifier.fadingEdges(scroll: ScrollState, width: Dp): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val fade = width.toPx().coerceAtMost(size.width / 3)
+        if (scroll.canScrollForward) {
+            drawRect(
+                Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - fade, endX = size.width),
+                topLeft = Offset(size.width - fade, 0f),
+                size = Size(fade, size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+        if (scroll.canScrollBackward) {
+            drawRect(
+                Brush.horizontalGradient(listOf(Color.Transparent, Color.Black), startX = 0f, endX = fade),
+                size = Size(fade, size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+    }
 
 @Composable
 private fun ListBlock(block: Block.BulletList) {

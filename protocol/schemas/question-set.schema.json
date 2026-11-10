@@ -18,6 +18,12 @@
       "default": "high",
       "description": "How urgent the decision is. critical: the person's app may take the full screen with an alarm until they decide (their choice in the app)."
     },
+    "locale": {
+      "type": "string",
+      "maxLength": 35,
+      "pattern": "^[A-Za-z]{2,3}([_-][A-Za-z0-9]{1,8})*$",
+      "description": "Language of the asker (the system or agent that reads the reply): reply.as_text is written in it. en, pt-BR and es are supported (pt, pt-PT, es-MX… map to them); anything else falls back to the request's Accept-Language header and then to en. It does not change what the human sees."
+    },
     "quorum": {
       "type": "object", "required": ["required"], "additionalProperties": false,
       "description": "Shorthand for decision { rule: \"quorum\", required } among the recipients in to.",

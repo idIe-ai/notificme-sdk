@@ -467,6 +467,19 @@ export const askFields: INodeProperties[] = [
 				default: 'medium',
 			},
 			{
+				displayName: 'Summary Language',
+				name: 'locale',
+				type: 'options',
+				options: [
+					{ name: 'English', value: 'en' },
+					{ name: 'Portuguese (Brazil)', value: 'pt-BR' },
+					{ name: 'Spanish', value: 'es' },
+				],
+				default: 'en',
+				description:
+					'Language of as_text, the summary of the answer for this workflow or an AI agent. It does not change what the person sees.',
+			},
+			{
 				displayName: 'Timeout',
 				name: 'timeout',
 				type: 'string',

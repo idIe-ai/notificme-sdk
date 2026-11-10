@@ -2,6 +2,8 @@
 
 Official Python SDK for [notific.me](https://notific.me). It sends events, keeps live cards up to date, asks people for decisions and waits for the answer, issues person tokens so your own app can show a person's inbox, and verifies the signed webhooks the server sends you.
 
+> **Early access.** The hosted service is opening in waves. To get a workspace and a service token, [join the list at notific.me](https://notific.me/?src=readme-python).
+
 - Python 3.10+, sync (`NotificMe`) and async (`AsyncNotificMe`) clients.
 - Built on [httpx](https://www.python-httpx.org/); webhook signatures use [cryptography](https://cryptography.io/) (Ed25519).
 - Retries 429, 5xx and network errors (honouring `Retry-After`), with a timeout on every request.
@@ -102,6 +104,8 @@ if result.status == "answered" and result.answers["action"] == "Deploy":
 
 print(result.as_text)  # natural-language summary, ready for an AI agent
 ```
+
+`as_text` is in English by default. Pass `locale="pt-BR"` or `locale="es"` to `ask()` to get it in your language; it does not change what the person sees.
 
 `ask()` long-polls until the reply arrives or the question set times out (`result.status == "timeout"`, with `on_timeout` applied). It raises `AskClosedError` when the question set expires or is cancelled. Pass `max_wait=` (seconds) to stop waiting earlier: it raises `AskPendingError`, and you can resume with `notific.wait_for_reply(err.ask_id)`.
 

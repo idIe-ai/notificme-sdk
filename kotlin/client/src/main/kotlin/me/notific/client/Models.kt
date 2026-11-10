@@ -41,6 +41,11 @@ public data class Notification(
     @SerialName("closed_at") val closedAt: String? = null,
     /** When the person gave "got it" on this (critical) alert, on any of their devices. */
     @SerialName("acknowledged_at") val acknowledgedAt: String? = null,
+    /**
+     * Display name of the workspace service whose slug is [source] (`ERP` for
+     * `erp`); null when the source is not a named service. Show this, not the slug.
+     */
+    @SerialName("source_name") val sourceName: String? = null,
 ) {
     /** No delivery of it was read yet. */
     public val unread: Boolean get() = deliveries.isNotEmpty() && deliveries.all { it.readAt == null }

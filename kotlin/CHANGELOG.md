@@ -4,11 +4,17 @@
 
 ### Added
 
+- `Notification.sourceName`: the display name of the service that sent it (`ERP` for source `erp`), from `GET /v0/sync` (`source_name`); null when the source is not a named service.
+- `InboxSnapshot.schema` (`InboxSnapshot.SCHEMA` = 1): a cache saved by an older SDK is shown at once, then synced again from cursor 0 once and replaced, so notifications cached before a new field (like `sourceName`) get it. Costs one full sync after the update.
 - **Linking a watch** in `client`: `NotificClient.createDeviceLinkCode()` (a one-time code, 2 minutes, once) and `Auth.linkDevice()` (the watch exchanges it for a session of its own, registered as a device). Plan B, like a TV sign-in: `Auth.startDeviceLink()` (a code to show), `NotificClient.approveDeviceLink()` (approved on a signed-in device) and `Auth.pollDeviceLink()`. `client-android` registers a watch as platform `wearos` (`NotificAndroid.PLATFORM_WEAR_OS`), named as the person named it (`WatchLinkClient.localName()` reads the name a Galaxy Watch keeps only in Bluetooth), and its reactions say `wearos` too.
 - **"Got it" (acknowledgment)** in `client`: `NotificClient.acknowledge()` and `Inbox.acknowledge()` (read plus an action reaction `acknowledged`, recorded as evidence and shown on every device as `Notification.acknowledgedAt`), and `Notification.asksForAck` (an open critical alert or a message from a person still waiting for it).
 - **`client-wear`** (Wear OS Data Layer, `MessageClient` only, a few bytes per message): the watch asks to be linked and the phone answers with `LinkCode`s; the phone forwards what arrives (`RelayItem`, with what a reply needs, so the watch shows and answers it without the network); `Handled` both ways ("got it", answered, read, being read, snoozed) so the other side stops ringing; the phone opens a watch screen (`PhoneLink.openOnWatch`, through `RemoteActivityHelper`). Phone side: `PhoneLink`, `PhoneBridgeService`; watch side: `WatchLinkClient`, `PhoneEventsService`. Protocol constants in `WatchLink`.
 - **`cards-wear`** (Compose for Wear OS): `WearInboxCard`, `WearNotificationCard` and `WearDecisionCard` for inbox rows; `WearBlock` and `Card.watchBlocks()` for card blocks on a small round screen (a chart becomes a sparkline, a table "column: value" lines); `wearQuestionItems` for the questions in a `TransformingLazyColumn`; `WearAnswerState` and `QuestionSet.watchSupport()` (what a watch can answer: `maxLevel`, `dictation`, `maxOptions`; `WatchBlocker` when it can't). Texts in English, Portuguese (Brazil) and Spanish.
 - Answers spoken on the watch: with dictation, `text` and `voice` questions take the transcription as `free_text`, `number` the number said (`WearAnswerState.parseSpokenNumber`, in the watch's language) and a `single` with `allow_other` a spoken "Other…". The app runs the speech recognizer and hands the text back with `WearAnswerState.setSpoken`.
+
+### Fixed
+
+- **`cards` tables fit the screen.** Columns of numbers (`150`, `1,090.00`, `US$ 3,842.60`, `-4%`) are right-aligned and never wrap; text columns wrap so the numbers fit. Only a table too wide even then scrolls sideways, and it fades at the edge that has more to show (a fourth column used to be cut off with no hint).
 
 ## 0.1.0
 

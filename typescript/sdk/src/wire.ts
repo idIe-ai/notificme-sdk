@@ -121,6 +121,7 @@ export function askToWire(a: AskInput): Record<string, unknown> {
     questions: a.questions.map(questionToWire),
     level: a.level,
     severity: a.severity,
+    locale: a.locale,
     quorum: a.quorum !== undefined ? { required: a.quorum } : undefined,
     decision: a.decision
       ? compact({

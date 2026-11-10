@@ -9,6 +9,8 @@
 - Level 4 is described as the device-key signature it is; it does not set how many people approve.
 - **Ask → Require Signature** (option): the person signs the answer with their electronic signature (typed in a cursive style or drawn) and initials, on top of the level. The output carries it in `e_signature` (name, method, PNG images and their SHA-256). Pro plans and above.
 
+- **Ask → Summary Language** (option): the language of `as_text` (English by default, Portuguese (Brazil) or Spanish). Before, the summary always came in Portuguese.
+
 ## 0.1.0
 
 - First release.

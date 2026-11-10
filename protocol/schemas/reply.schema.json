@@ -28,7 +28,7 @@
         }
       }
     },
-    "as_text": { "type": "string", "description": "Natural-language summary, ready for an AI agent's context." },
+    "as_text": { "type": "string", "description": "Natural-language summary, ready for an AI agent's context. Written in the asker's language: question-set.locale, else the Accept-Language of POST /v0/asks, else en (en, pt-BR and es are supported). Question texts, option labels and free text are quoted as they were written." },
     "answered_by": {
       "type": "object",
       "required": ["identity", "device_id", "level_used"],

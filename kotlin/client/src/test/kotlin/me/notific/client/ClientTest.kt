@@ -286,6 +286,7 @@ class ClientTest {
                 cursor = 7,
                 notifications = listOf(Notification(id = "old", createdAt = "2026-11-05T10:00:00Z", title = "Old")),
                 questions = listOf(QuestionSet(id = "q1", title = "Cached")),
+                schema = InboxSnapshot.SCHEMA,
             )
             override suspend fun save(snapshot: InboxSnapshot) { saved += snapshot }
             override suspend fun clear() = Unit
@@ -313,7 +314,62 @@ class ClientTest {
         assertEquals(8, last.cursor)
         assertEquals(setOf("new", "old"), last.notifications.map { it.id }.toSet())
         assertTrue(last.questions.isEmpty())
+        assertEquals(InboxSnapshot.SCHEMA, last.schema)
     }
+
+    @Test
+    fun aCacheFromAnOlderSdkResyncsOnceFromTheStart() = runBlocking<Unit> {
+        val saved = CopyOnWriteArrayList<InboxSnapshot>()
+        // Saved before source_name existed: no schema in the file.
+        val old = Wire.json.decodeFromString(
+            InboxSnapshot.serializer(),
+            """{"cursor":40,"notifications":[{"id":"n1","created_at":"2026-11-05T10:00:00Z","source":"erp","title":"PO"},{"id":"gone","created_at":"2026-11-01T10:00:00Z","source":"erp","title":"Pruned"}]}""",
+        )
+        assertEquals(0, old.schema)
+        var stored: InboxSnapshot? = old
+        val cache = object : InboxCache {
+            override suspend fun load() = stored
+            override suspend fun save(snapshot: InboxSnapshot) { saved += snapshot; stored = snapshot }
+            override suspend fun clear() = Unit
+        }
+        val c = client { req ->
+            when (req.url.encodedPath) {
+                "/v0/sync" -> json(
+                    if (req.url.parameters["cursor"] == "0") {
+                        """{"changes":[{"seq":41,"entity":"notification","id":"n1","op":"upsert","workspace_id":"w1","data":{"id":"n1","created_at":"2026-11-05T10:00:00Z","source":"erp","source_name":"ERP","title":"PO"}}],"next_cursor":41,"has_more":false,"reset":false}"""
+                    } else {
+                        """{"changes":[],"next_cursor":41,"has_more":false,"reset":false}"""
+                    },
+                )
+                "/v0/question-sets" -> json("""{"question_sets":[]}""")
+                else -> json("{}", HttpStatusCode.NotFound)
+            }
+        }
+        val inbox = Inbox(c, CoroutineScope(Dispatchers.Default), cache = cache)
+        inbox.restore()
+        // Shown at once, as cached.
+        assertEquals(listOf("n1", "gone"), inbox.state.value.notifications.map { it.id })
+        inbox.flush()
+        // Offline before the first sync: still saved as old, so the resync stays owed.
+        assertEquals(0, saved.last().schema)
+
+        inbox.refresh()
+        // The whole feed again, from the start, replacing the cache like a new install.
+        assertEquals("0", requests.single { it.url.encodedPath == "/v0/sync" }.url.parameters["cursor"])
+        assertEquals(listOf("n1"), inbox.state.value.notifications.map { it.id })
+        assertEquals("ERP", inbox.state.value.notifications.single().sourceName)
+        inbox.flush()
+        assertEquals(InboxSnapshot.SCHEMA, saved.last().schema)
+        assertEquals(41, saved.last().cursor)
+
+        // Once: the next launch continues from the cursor.
+        requests.clear()
+        val again = Inbox(c, CoroutineScope(Dispatchers.Default), cache = cache)
+        again.refresh()
+        assertEquals("41", requests.single { it.url.encodedPath == "/v0/sync" }.url.parameters["cursor"])
+        assertEquals("ERP", again.state.value.notifications.single().sourceName)
+    }
+
     @Test
     fun inboxAppliesReadsMadeOnAnotherDevice() = runBlocking<Unit> {
         val c = client { req ->
@@ -568,5 +624,14 @@ class ClientTest {
         assertEquals("nova@x.com", item.answers.single().email)
         val res = Wire.json.decodeFromString(ComposeResult.serializer(), """{"kind":"message","recipients":[],"emails":["nova@x.com"]}""")
         assertEquals(listOf("nova@x.com"), res.emails)
+    }
+
+    @Test
+    fun notificationCarriesTheServiceName() {
+        val named = Wire.json.decodeFromString(Notification.serializer(), """{"id":"n1","source":"erp","source_name":"ERP"}""")
+        assertEquals("ERP", named.sourceName)
+        val plain = Wire.json.decodeFromString(Notification.serializer(), """{"id":"n2","source":"github","source_name":null}""")
+        assertNull(plain.sourceName)
+        assertNull(Wire.json.decodeFromString(Notification.serializer(), """{"id":"n3"}""").sourceName)
     }
 }

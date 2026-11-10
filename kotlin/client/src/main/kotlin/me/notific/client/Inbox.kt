@@ -83,7 +83,19 @@ public data class InboxSnapshot(
     @SerialName("user_id") val userId: String? = null,
     /** See [InboxState.ended]. */
     val ended: Map<String, QuestionSetStatus> = emptyMap(),
-)
+    /**
+     * Version of what a cached notification carries. A snapshot saved by an
+     * older SDK (missing = 0) is shown at once but synced again from the start
+     * once, since the feed only sends what changed (fields added later, like
+     * [Notification.sourceName], would never reach the items kept here).
+     */
+    val schema: Int = 0,
+) {
+    public companion object {
+        /** Bump when [Notification] gains a field the feed sends: caches older than it resync once. */
+        public const val SCHEMA: Int = 1
+    }
+}
 
 /**
  * The part of a `question_set` change of the feed that says whether it is
@@ -132,6 +144,9 @@ public class Inbox(
     private var restored = false
     private var saveJob: Job? = null
 
+    /** The cache was from an older [InboxSnapshot.SCHEMA]: the first page from cursor 0 replaces it. */
+    private var resync = false
+
     /**
      * Loads the cached state, if any (once; [start] and [refresh] call it).
      * Call it early to show the last inbox before the network answers.
@@ -144,7 +159,10 @@ public class Inbox(
             val snap = runCatching { c.load() }.getOrNull() ?: return
             snap.notifications.forEach { byId[it.id] = it }
             snap.ended.forEach { (id, status) -> ended.putIfAbsent(id, status) }
-            if (snap.cursor > cursor) cursor = snap.cursor
+            // An older cache: shown now, but the next pull starts over (cursor 0)
+            // and replaces it, as a first sync on a new install would.
+            if (snap.schema < InboxSnapshot.SCHEMA) resync = true
+            else if (snap.cursor > cursor) cursor = snap.cursor
             mutable.update { it.copy(questions = snap.questions, loading = snap.notifications.isEmpty() && snap.questions.isEmpty()) }
             publish()
         }
@@ -286,7 +304,10 @@ public class Inbox(
         // Votes on open questions (decision rules): shown at once, before the list reloads.
         val votes = HashMap<String, DecisionView>()
         lock.withLock {
-            if (page.reset) byId.clear()
+            if (page.reset || resync) {
+                byId.clear()
+                resync = false
+            }
             for (c in page.changes) {
                 if (workspaceId != null && c.workspaceId.isNotEmpty() && c.workspaceId != workspaceId) continue
                 when (c.entity) {
@@ -405,7 +426,14 @@ public class Inbox(
 
     private suspend fun save(c: InboxCache) {
         val snap = lock.withLock {
-            InboxSnapshot(cursor = cursor, notifications = byId.values.toList(), questions = state.value.questions, ended = HashMap(ended))
+            InboxSnapshot(
+                cursor = cursor,
+                notifications = byId.values.toList(),
+                questions = state.value.questions,
+                ended = HashMap(ended),
+                // Still owed a full sync (offline since the update): saved as old, so it stays owed.
+                schema = if (resync) 0 else InboxSnapshot.SCHEMA,
+            )
         }
         runCatching { c.save(snap) }
     }

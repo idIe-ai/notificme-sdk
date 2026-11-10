@@ -193,7 +193,8 @@ class AskResult:
     #: decision rule closed it as rejected: approval impossible, or a veto).
     status: str
     timed_out: bool
-    #: Natural-language summary of the decision, ready for an AI agent.
+    #: Natural-language summary of the decision, ready for an AI agent, in the
+    #: ask's ``locale`` (default ``"en"``).
     as_text: str
     answers: Dict[str, Any]
     #: Every answer with its question text, raw value and free text.

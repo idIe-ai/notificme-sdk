@@ -162,6 +162,7 @@ def ask_to_wire(
     context: Optional[str] = None,
     level: Optional[int] = None,
     severity: Optional[str] = None,
+    locale: Optional[str] = None,
     quorum: Optional[int] = None,
     decision: Optional[Mapping[str, Any]] = None,
     offline: Optional[str] = None,
@@ -177,6 +178,8 @@ def ask_to_wire(
     ``severity``: ``"high"`` (default) or ``"critical"`` (the person's app may take
     the full screen with an alarm until they decide). ``require_signature``: ask
     for the person's electronic signature on top of the level (Pro plans and above).
+    ``locale``: your language, the one ``as_text`` comes back in (``"en"`` by
+    default, ``"pt-BR"`` or ``"es"``); it does not change what the human sees.
 
     ``decision``: who may decide and which rule closes the question, e.g.
     ``{"by": "#board>=director", "rule": "quorum", "required": 2, "requested_by": "@ana"}``
@@ -193,6 +196,7 @@ def ask_to_wire(
             "questions": [question_to_wire(q) for q in questions],
             "level": level,
             "severity": severity,
+            "locale": locale,
             "quorum": {"required": quorum} if quorum is not None else None,
             "decision": _decision_to_wire(decision) if decision is not None else None,
             "offline": offline,

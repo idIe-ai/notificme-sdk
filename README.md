@@ -24,15 +24,24 @@
   </picture>
 </p>
 
-<h3 align="center">Ask a human before your code acts.</h3>
+<h3 align="center">The second factor for decisions.</h3>
 
 <p align="center">
-  Send events with context, ask people for decisions and get the answer back in your code,<br>
-  <b>signed on their phone</b>. Like 2FA, but for decisions.
+  2FA proves who signed in. notific.me proves <b>who decided</b>.<br>
+  People, systems and AI agents ask, the right person answers on their phone,<br>
+  and the <b>signed answer</b> goes back to your code so the work carries on.
 </p>
 
 <p align="center">
+  <a href="https://notific.me/?src=readme-sdk"><img alt="Request early access" src="https://img.shields.io/badge/Request%20early%20access-FF6A00?style=for-the-badge"></a>
+  &nbsp;
+  <a href="https://docs.notific.me"><img alt="Read the docs" src="https://img.shields.io/badge/Read%20the%20docs-0B1F44?style=for-the-badge"></a>
+</p>
+
+<p align="center">
+  <a href="https://notific.me/?src=readme-sdk"><b>Website</b></a> ·
   <a href="#quick-start"><b>Quick start</b></a> ·
+  <a href="#one-hub-any-system-in-any-channel-out"><b>One hub</b></a> ·
   <a href="#how-it-works"><b>How it works</b></a> ·
   <a href="typescript/sdk/"><b>TypeScript</b></a> ·
   <a href="python/"><b>Python</b></a> ·
@@ -44,11 +53,49 @@
 
 ---
 
+> **Early access.** The hosted service is opening in waves. To get a workspace and a service token, [join the list at notific.me](https://notific.me/?src=readme-sdk).
+
 ## What is notific.me?
 
-Your services, scripts and AI agents **send events**. notific.me decides who needs to know and delivers them with context (metrics, charts, tables, progress, links). When a decision is needed, it **brings the human answer back to your code**, and for sensitive actions that answer is signed by a key on the person's device, unlocked only by biometrics.
+notific.me is the **inbox for decisions**. A request reaches the right person with its context (metrics, charts, tables, progress, links), they answer on their phone with the proof the decision calls for, and the **signed answer goes back to whoever asked**. Rules agreed beforehand say who may decide; an evidence trail keeps who received, read and answered.
 
-No dashboards to check, no Slack thread to dig through: the person gets what matters, with the options in hand, and your code gets a typed answer with proof of who decided.
+No approval lost in an e-mail thread, no dashboard to check: the person gets what matters, with the options in hand, and your code gets a typed answer with proof of who decided.
+
+| Who asks | Example |
+| --- | --- |
+| 🙋 **A person** | An employee asks their manager to approve a purchase order or a document, from the web or the app. No code. |
+| ⚙️ **A system** | Your ERP, your CRM or your deploy pipeline asks before it goes on, and waits for the answer. |
+| 🤖 **An AI agent** | The agent asks for permission before a sensitive action. Nothing happens without a human. |
+
+## One hub: any system in, any channel out
+
+Every notification and every request from your company goes through one place, with the same rules and the same proof.
+
+```mermaid
+flowchart LR
+    subgraph IN["Comes in from"]
+        direction TB
+        A1["TypeScript and Python SDKs"]
+        A2["REST API"]
+        A3["Incoming webhooks"]
+        A4["n8n"]
+        A5["AI agents (MCP)"]
+        A6["People, from the web or the app"]
+    end
+    HUB(("notific.me<br/>rules · delivery · proof"))
+    subgraph OUT["Reaches people on"]
+        direction TB
+        B1["Web app"]
+        B2["Phone, with push"]
+        B3["Android app"]
+        B4["E-mail"]
+        B5["Inside your own app"]
+        B6["Back to your system (signed webhook)"]
+    end
+    IN --> HUB --> OUT
+```
+
+The [protocol](protocol/) is open, so any screen can become a channel: an ESP32 on a desk, an iOS app, a TV, a tablet or your internal system. See [White label for your product](#white-label-for-your-product).
 
 <table>
   <tr>
@@ -87,6 +134,7 @@ No dashboards to check, no Slack thread to dig through: the person gets what mat
 
 | Who | What reaches the phone | What they do |
 | --- | --- | --- |
+| 🧾 **Operations and finance** | A purchase order, a payment batch, a contract version to approve | Approve, ask for changes or deny, by whoever has the authority, and by two people when you require it |
 | 🤖 **AI agents** | "The agent wants to delete 340 duplicated contacts" | Approve, deny, pick an option or answer in text, with biometrics |
 | 🛠️ **Dev and infra** | A container died, a deploy finished, a health check failed | Follow a live card with metrics, open the dashboard |
 | 💼 **Product and business** | A new lead, a refund to approve, a purchase request | Answer with one tap or fill in a short form |
@@ -128,7 +176,9 @@ Pick how much proof an answer needs. The higher the level, the stronger the guar
 | **1** | Answers from a signed-in session | Routine approvals |
 | **2** | Biometrics or device passcode in the app (or an authenticator code on the web) | Deploys, refunds, deleting data |
 | **3** | Biometrics (or a fresh authenticator code), online, within a short window | Money and production access |
-| **4** | Several people approve (quorum) | High-risk changes *(coming soon)* |
+| **4** | Signs with a key held by the device | Highest-risk changes *(coming soon)* |
+
+How many people approve is a separate rule, not a level: `any`, `quorum`, `majority`, `unanimous` or one from each group (four eyes), with escalation when nobody answers. See `decision` in the [TypeScript](typescript/sdk/) and [Python](python/) SDKs.
 
 ## Quick start
 
@@ -301,14 +351,14 @@ Each SDK is versioned and released on its own, from a tag. GitHub Actions publis
 
 | SDK | Bump the version in | Tag | Workflow |
 | --- | --- | --- | --- |
-| TypeScript | `typescript/sdk/package.json` and `typescript/sdk/src/version.ts` | `ts-v0.2.0` | [`publish-npm.yml`](.github/workflows/publish-npm.yml) |
-| Python | `python/src/notificme/_version.py` | `py-v0.2.0` | [`publish-pypi.yml`](.github/workflows/publish-pypi.yml) |
+| TypeScript | `typescript/sdk/package.json` and `typescript/sdk/src/version.ts` | `ts-v0.3.0` | [`publish-npm.yml`](.github/workflows/publish-npm.yml) |
+| Python | `python/src/notificme/_version.py` | `py-v0.3.0` | [`publish-pypi.yml`](.github/workflows/publish-pypi.yml) |
 | n8n node | `n8n/package.json` | `n8n-v0.1.0` | [`publish-n8n.yml`](.github/workflows/publish-n8n.yml) |
 
 Releases are automatic: when a version bump is synced here from the monorepo, the sync creates the missing tag on the synced commit, and the tag starts the publish workflow. A tag can also be pushed by hand:
 
 ```sh
-git tag ts-v0.2.0 && git push origin ts-v0.2.0
+git tag ts-v0.3.0 && git push origin ts-v0.3.0
 ```
 
 The workflow runs the full CI, checks that the tag matches the package version, and publishes. Pre-release versions (`0.2.0-beta.1`) go to the `next` dist-tag on npm.

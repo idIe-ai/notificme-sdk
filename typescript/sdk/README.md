@@ -2,6 +2,8 @@
 
 Official TypeScript SDK for [notific.me](https://notific.me). It sends events, keeps live cards up to date, asks people for decisions and waits for the answer, issues person tokens so your own app can show a person's inbox, and verifies the signed webhooks the server sends you.
 
+> **Early access.** The hosted service is opening in waves. To get a workspace and a service token, [join the list at notific.me](https://notific.me/?src=readme-typescript).
+
 - Works on Node.js 18+, Bun, Deno, Cloudflare Workers and browsers.
 - Ships ESM and CommonJS with full type definitions.
 - Has no runtime dependencies. It uses the native `fetch` and WebCrypto.
@@ -101,6 +103,8 @@ if (r.status === "answered" && r.answers.action === "Approve" && r.answers.backu
 
 console.log(r.asText); // natural-language summary, ready for an AI agent
 ```
+
+`asText` is in English by default. Pass `locale: "pt-BR"` or `locale: "es"` to `ask()` to get it in your language; it does not change what the person sees.
 
 | Question type | Answer type |
 | --- | --- |

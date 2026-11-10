@@ -399,7 +399,8 @@ interface AskResultBase {
   version: number;
   /**
    * Natural-language summary of the decision, ready for an AI agent. Free
-   * text inside it is quoted and labelled as untrusted by the server.
+   * text inside it is quoted and labelled as untrusted by the server. Written
+   * in the ask's `locale` (default `"en"`).
    */
   asText: string;
   answeredBy?: AnsweredBy;
@@ -456,6 +457,12 @@ export interface AskInput<Qs extends readonly Question[] = readonly Question[]> 
    * the full screen with an alarm until they decide (their choice in the app).
    */
   severity?: Severity;
+  /**
+   * Your language, the one `asText` comes back in: `"en"` (default), `"pt-BR"`
+   * or `"es"` (`"pt"`, `"es-MX"`… map to them). It does not change what the
+   * human sees.
+   */
+  locale?: string;
   /** Shorthand for `decision: { rule: "quorum", required }` among `to`. */
   quorum?: number;
   /** Who may decide and which rule closes the question. */

@@ -2,6 +2,8 @@
 
 The official [n8n](https://n8n.io) node for [notific.me](https://notific.me): ask a human for a decision on their phone and **pause the workflow until the signed answer comes back**, or send events that notific.me routes to the right people.
 
+> **Early access.** The hosted service is opening in waves. To get a workspace and a service token, [join the list at notific.me](https://notific.me/?src=readme-n8n).
+
 - [Installation](#installation)
 - [Credentials](#credentials)
 - [Operations](#operations)

@@ -167,6 +167,7 @@ export function buildAskBody(ctx: IExecuteFunctions, i: number): IDataObject {
 		questions,
 		level: options.level as number | undefined,
 		severity: options.severity as string | undefined,
+		locale: options.locale as string | undefined,
 		offline: options.offline as string | undefined,
 		timeout: options.timeout as string | undefined,
 		on_timeout: onTimeout && Object.keys(onTimeout).length > 0 ? onTimeout : undefined,
