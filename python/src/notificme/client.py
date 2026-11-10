@@ -342,7 +342,9 @@ class NotificMe(_Base):
         ``timeout`` (e.g. ``"30m"``), ``on_timeout``, ``escalate`` (e.g.
         ``[{"after": "30m", "to": "#ceo"}]``), ``callback_url``, ``require_signature`` (the
         person's electronic signature, in ``AskResult.e_signature``; Pro plans and above),
-        ``card``. ``to`` accepts ``@handle``, member e-mails and groups (``#finance``,
+        ``require_face`` (the person's face verified in the notific.me app, reported in
+        ``AskResult.face_verification``; Business plans and above), ``card``.
+        ``to`` accepts ``@handle``, member e-mails and groups (``#finance``,
         ``#finance>=manager``).
         """
         handle = self.create_ask(

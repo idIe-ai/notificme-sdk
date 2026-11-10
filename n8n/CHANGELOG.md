@@ -8,6 +8,7 @@
 - Output: with a decision rule, `approved` follows the outcome of the rule (not the last vote), and `decision` and `votes` come with the answer. `status` is `rejected` when the rule closed the ask as rejected.
 - Level 4 is described as the device-key signature it is; it does not set how many people approve.
 - **Ask → Require Signature** (option): the person signs the answer with their electronic signature (typed in a cursive style or drawn) and initials, on top of the level. The output carries it in `e_signature` (name, method, PNG images and their SHA-256). Pro plans and above.
+- **Ask → Require Face** (option): the answer is only accepted after the person verifies their face in the notific.me app, against the face they enrolled in the organization. The output carries `face_verification` (`result` is `verified`, or `fallback` when the organization accepted the authenticator code instead). Business plans and above, with face verification turned on.
 
 - **Ask → Summary Language** (option): the language of `as_text` (English by default, Portuguese (Brazil) or Spanish). Before, the summary always came in Portuguese.
 

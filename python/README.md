@@ -115,6 +115,8 @@ To create the question set without waiting, use `create_ask()` (returns a handle
 
 Pass `require_signature=True` to have the person sign the answer with their electronic signature (their name in a cursive style, or drawn) and initials, on top of the level. It comes back in `result.e_signature` (name, method, PNG images in base64 and their SHA-256), covered by the reply signature. Pro plans and above.
 
+Pass `require_face=True` and the answer is only accepted after the person verifies their face in the notific.me app, against the face they enrolled in the organization. Business plans and above, with face verification turned on by the organization. `result.face_verification.result` is `"verified"`, or `"fallback"` when the face was **not** verified and the organization accepted the authenticator code instead (`reason`: `"attempts_exhausted"` or `"not_enrolled"`). No biometric data and no score ever come back.
+
 ### Groups, decision rules and escalation
 
 `to` accepts groups of your workspace: `"#finance"`, or `"#finance>=manager"` for only the people with that authority level (or above) in that group. Separate who **sees** the card from who **decides**, and say which rule closes the question (Team plan and above):

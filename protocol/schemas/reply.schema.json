@@ -100,6 +100,19 @@
         "adopted_at": { "type": "string", "format": "date-time", "description": "When the person adopted this signature." }
       }
     },
+    "face_verification": {
+      "type": "object",
+      "description": "How the face of the person who answered was checked, when the question set had require_face. No biometric data and no score: those stay in the evidence trail.",
+      "required": ["result", "verified_at"],
+      "additionalProperties": false,
+      "properties": {
+        "result": { "enum": ["verified", "fallback"], "description": "verified: the face matched the enrolled one. fallback: the face was not verified and the organization accepts the authenticator code instead (see reason)." },
+        "reason": { "enum": ["attempts_exhausted", "not_enrolled"], "description": "Only on fallback: the person ran out of attempts, or never enrolled their face and the organization accepts the authenticator code from those members." },
+        "verification_id": { "type": "string", "format": "uuid", "description": "The verification that backed this answer (absent on fallback)." },
+        "model": { "type": "string", "description": "Version of the face model that compared the faces." },
+        "verified_at": { "type": "string", "format": "date-time" }
+      }
+    },
     "signature": {
       "type": "object",
       "required": ["alg", "value"],

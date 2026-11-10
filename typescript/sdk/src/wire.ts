@@ -140,6 +140,7 @@ export function askToWire(a: AskInput): Record<string, unknown> {
     escalate: a.escalate?.map((s) => (typeof s === "string" ? s : compact({ after: duration(s.after), to: list(s.to) }))),
     callback_url: a.callbackUrl,
     require_signature: a.requireSignature ? true : undefined,
+    require_face: a.requireFace ? true : undefined,
     card: cardToWire(a.card),
   });
 }
@@ -331,6 +332,15 @@ export function toAskResult<const Qs extends readonly Question[] = readonly Ques
           initialsSha256: r.e_signature.initials_sha256,
           consentVersion: r.e_signature.consent_version,
           adoptedAt: r.e_signature.adopted_at,
+        })
+      : undefined,
+    faceVerification: r.face_verification
+      ? compact({
+          result: r.face_verification.result,
+          reason: r.face_verification.reason,
+          verificationId: r.face_verification.verification_id,
+          model: r.face_verification.model,
+          verifiedAt: r.face_verification.verified_at,
         })
       : undefined,
     signature: r.signature

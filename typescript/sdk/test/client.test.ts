@@ -547,6 +547,25 @@ describe("electronic signature", () => {
     });
   });
 
+  it("asks for a verified face and reports how it was checked", async () => {
+    const face = {
+      result: "fallback",
+      reason: "attempts_exhausted",
+      verified_at: "2026-11-10T14:03:11Z",
+    };
+    server = await fakeServer((req, res) => {
+      if (req.method === "POST") return sendJson(res, 201, askView("open"));
+      sendJson(res, 200, askView("answered", { ...reply, face_verification: face }));
+    });
+    const r = await client(server.url).ask({
+      title: "Sign the contract?",
+      questions: [{ id: "ok", type: "yesno", text: "Sign?" }] as const,
+      requireFace: true,
+    });
+    expect(server.requests[0]!.json).toMatchObject({ require_face: true });
+    expect(r.faceVerification).toEqual({ result: "fallback", reason: "attempts_exhausted", verifiedAt: "2026-11-10T14:03:11Z" });
+  });
+
   it("does not send require_signature unless asked", async () => {
     server = await fakeServer((req, res) => {
       if (req.method === "POST") return sendJson(res, 201, askView("open"));

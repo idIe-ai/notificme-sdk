@@ -144,6 +144,24 @@ class WireTest {
     }
 
     @Test
+    fun faceVerificationOnTheWire() {
+        assertTrue(Wire.json.decodeFromString(QuestionSet.serializer(), """{"id":"q","require_face":true}""").requireFace)
+        assertEquals(false, Wire.json.decodeFromString(QuestionSet.serializer(), """{"id":"q"}""").requireFace)
+        val reply = Wire.json.decodeFromString(
+            Reply.serializer(),
+            """{"question_set_id":"q","face_verification":{"result":"fallback","reason":"not_enrolled","verified_at":"2026-11-10T14:03:11Z"}}""",
+        )
+        assertEquals(FaceVerification.Result.Fallback, reply.faceVerification?.result)
+        assertEquals(FaceVerification.Reason.NotEnrolled, reply.faceVerification?.reason)
+        assertNull(reply.faceVerification?.verificationId)
+        assertNull(Wire.json.decodeFromString(Reply.serializer(), """{"question_set_id":"q"}""").faceVerification)
+        assertTrue(
+            Wire.json.encodeToString(Compose.serializer(), Compose(kind = Compose.FORM, to = listOf("@ana"), title = "T", requireFace = true))
+                .contains(""""require_face":true"""),
+        )
+    }
+
+    @Test
     fun composeAndSentCarryTheSignature() {
         val wire = Wire.json.parseToJsonElement(
             Wire.json.encodeToString(Compose.serializer(), Compose(kind = Compose.FORM, to = listOf("@ana"), title = "T", requireSignature = true)),

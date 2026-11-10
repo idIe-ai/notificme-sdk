@@ -393,6 +393,25 @@ export interface ESignature {
   adoptedAt: string;
 }
 
+/**
+ * How the face of the person who answered was checked (asked with
+ * `requireFace`). No biometric data and no score.
+ */
+export interface FaceVerification {
+  /**
+   * `verified`: the face matched the one the person enrolled in the
+   * organization. `fallback`: the face was NOT verified and the organization
+   * accepts the authenticator code instead (see `reason`).
+   */
+  result: "verified" | "fallback";
+  /** Only on `fallback`: the person ran out of attempts, or never enrolled their face. */
+  reason?: "attempts_exhausted" | "not_enrolled";
+  verificationId?: string;
+  /** Version of the face model that compared the faces. */
+  model?: string;
+  verifiedAt: string;
+}
+
 interface AskResultBase {
   /** Question set id. */
   id: string;
@@ -408,6 +427,8 @@ interface AskResultBase {
   contentHash?: string;
   /** The person's electronic signature, when the question set had `requireSignature`. */
   eSignature?: ESignature;
+  /** How the person's face was checked, when the question set had `requireFace`. */
+  faceVerification?: FaceVerification;
   signature?: ReplySignature;
   /** How the decision rule closed it (questions with `decision`). */
   decision?: DecisionOutcome;
@@ -486,6 +507,13 @@ export interface AskInput<Qs extends readonly Question[] = readonly Question[]> 
    * carries it in `eSignature`. Pro plans and above (`plan_required` otherwise).
    */
   requireSignature?: boolean;
+  /**
+   * Only accept the answer after the person's face is verified, in the
+   * notific.me app, against the face they enrolled in the organization. The
+   * result reports it in `faceVerification`. Business plans and above with
+   * face verification turned on (`plan_required` / `face_disabled` otherwise).
+   */
+  requireFace?: boolean;
   card?: Card;
 }
 

@@ -483,6 +483,67 @@ class ClientTest {
     }
 
     @Test
+    fun replyCarriesTheFaceProof() = runBlocking<Unit> {
+        val c = client { json(accepted) }
+        val qs = QuestionSet(id = "q1", version = 2, level = 1, requireFace = true)
+        c.reply(qs, listOf(Answer.yesNo("ok", true)), face = FaceProof.Verified("v1"))
+        val face = requests.single().bodyJson()["face"]!!.jsonObject
+        assertEquals("v1", face["verification_id"]!!.jsonPrimitive.content)
+        assertEquals(1, face.size)
+
+        requests.clear()
+        c.reply(qs, listOf(Answer.yesNo("ok", true)), authMethod = AuthMethod.Totp, totpCode = "123456", face = FaceProof.Fallback)
+        val body = requests.single().bodyJson()
+        assertEquals("true", body["face"]!!.jsonObject["fallback"]!!.jsonPrimitive.content)
+        assertEquals(1, body["face"]!!.jsonObject.size)
+        assertEquals("totp", body["auth_method"]!!.jsonPrimitive.content)
+
+        requests.clear()
+        c.reply(QuestionSet(id = "q1"), listOf(Answer.yesNo("ok", true)))
+        assertNull(requests.single().bodyJson()["face"])
+    }
+
+    @Test
+    fun faceEnrollAndVerify() = runBlocking<Unit> {
+        val status = """{"available":true,"allowed":true,"required_plan":"business","country":{"code":"BR","status":"allowed","conditions":[]},"settings":{"enabled":true,"threshold":0.363,"on_fail":"fallback","unenrolled":"block","accepted_conditions":[],"terms_version":"2026-11-09","enabled_at":"2026-11-10T12:00:00Z"},"me":{"enrolled":true,"enrolled_at":"2026-11-10T12:01:00Z","model":"m1"},"consent_version":"2026-11-09","terms_version":"2026-11-09"}"""
+        val c = client { req ->
+            when (req.url.encodedPath) {
+                "/v0/workspaces/acme/face/challenges" ->
+                    json("""{"id":"c1","purpose":"verify","steps":["center","left","sideways"],"expires_at":"2026-11-10T12:02:00Z"}""", HttpStatusCode.Created)
+                "/v0/workspaces/acme/face/verifications" ->
+                    json("""{"id":"v1","passed":false,"reason":"no_match","question_set_id":"q1","attempts_left":2,"retry_at":null,"on_fail":"fallback","expires_at":null}""")
+                else -> json(status)
+            }
+        }
+        val s = c.face.status("@acme")
+        assertTrue(s.usable && s.me.enrolled)
+        assertEquals(FaceFallbackPolicy.Fallback, s.settings.onFail)
+        assertEquals(FaceCountryStatus.Allowed, s.country?.status)
+
+        val ch = c.face.challenge("acme", FacePurpose.Verify, questionSetId = "q1")
+        assertEquals(listOf(FaceStep.Center, FaceStep.Left, FaceStep.Unknown), ch.steps)
+        val sent = requests.last().bodyJson()
+        assertEquals("verify", sent["purpose"]!!.jsonPrimitive.content)
+        assertEquals("q1", sent["question_set_id"]!!.jsonPrimitive.content)
+
+        val check = c.face.verify("acme", ch.id, listOf(byteArrayOf(1, 2, 3)))
+        assertEquals(false, check.passed)
+        assertEquals(2, check.attemptsLeft)
+        assertEquals("AQID", requests.last().bodyJson()["frames"]!!.jsonArray.single().jsonPrimitive.content)
+
+        c.face.enroll("acme", "c2", s.consentVersion, listOf(byteArrayOf(1)))
+        val enroll = requests.last()
+        assertEquals("/v0/workspaces/acme/face/enrollment", enroll.url.encodedPath)
+        assertEquals("true", enroll.bodyJson()["consent"]!!.jsonObject["accepted"]!!.jsonPrimitive.content)
+        assertEquals("2026-11-09", enroll.bodyJson()["consent"]!!.jsonObject["version"]!!.jsonPrimitive.content)
+
+        c.face.updateSettings("acme", unenrolled = FaceFallbackPolicy.Fallback)
+        val put = requests.last().bodyJson()
+        assertEquals("fallback", put["unenrolled"]!!.jsonPrimitive.content)
+        assertEquals(1, put.size)
+    }
+
+    @Test
     fun inboxReplyPassesTheSignatureOn() = runBlocking<Unit> {
         val c = client { req ->
             when (req.url.encodedPath) {

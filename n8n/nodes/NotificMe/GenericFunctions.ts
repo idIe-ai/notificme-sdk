@@ -175,6 +175,7 @@ export function buildAskBody(ctx: IExecuteFunctions, i: number): IDataObject {
 		escalate: buildEscalation(options),
 		callback_url: options.callbackUrl as string | undefined,
 		require_signature: options.requireSignature === true ? true : undefined,
+		require_face: options.requireFace === true ? true : undefined,
 	});
 }
 
@@ -272,6 +273,8 @@ export function replyToOutput(reply: IDataObject): IDataObject {
 	if (Array.isArray(reply.votes)) out.votes = reply.votes;
 	// Electronic signature (Require Signature): name, method, PNG images and hashes.
 	if (reply.e_signature) out.e_signature = reply.e_signature;
+	// Face verification (Require Face): result (verified or fallback), model and time.
+	if (reply.face_verification) out.face_verification = reply.face_verification;
 	out.reply = reply;
 	return out;
 }

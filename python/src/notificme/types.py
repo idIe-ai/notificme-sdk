@@ -176,6 +176,24 @@ class ESignature:
     consent_version: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class FaceVerification:
+    """How the face of the person who answered was checked (``require_face``).
+
+    No biometric data and no score.
+    """
+
+    #: ``verified`` (the face matched the enrolled one) or ``fallback`` (the face was
+    #: NOT verified and the organization accepts the authenticator code instead).
+    result: str
+    verified_at: str
+    #: Only on ``fallback``: ``attempts_exhausted`` or ``not_enrolled``.
+    reason: Optional[str] = None
+    verification_id: Optional[str] = None
+    #: Version of the face model that compared the faces.
+    model: Optional[str] = None
+
+
 @dataclass
 class AskResult:
     """Final result of ``ask()``.
@@ -206,6 +224,8 @@ class AskResult:
     content_hash: Optional[str] = None
     #: The person's electronic signature, when the question set had ``require_signature``.
     e_signature: Optional[ESignature] = None
+    #: How the person's face was checked, when the question set had ``require_face``.
+    face_verification: Optional[FaceVerification] = None
     signature: Optional[ReplySignature] = None
     #: How the decision rule closed it (snake_case): ``rule``, ``required``, ``eligible``,
     #: ``approvals``, ``rejections``, ``outcome`` (``approved``/``rejected``), ``by``.

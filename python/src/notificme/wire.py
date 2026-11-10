@@ -17,6 +17,7 @@ from .types import (
     AskInfo,
     AskResult,
     ESignature,
+    FaceVerification,
     MemberToken,
     MemberUser,
     ReplySignature,
@@ -171,6 +172,7 @@ def ask_to_wire(
     escalate: Optional[Iterable[Union[str, Mapping[str, Any]]]] = None,
     callback_url: Optional[str] = None,
     require_signature: Optional[bool] = None,
+    require_face: Optional[bool] = None,
     card: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """``ask()`` arguments → ``question-set.schema.json``.
@@ -178,6 +180,8 @@ def ask_to_wire(
     ``severity``: ``"high"`` (default) or ``"critical"`` (the person's app may take
     the full screen with an alarm until they decide). ``require_signature``: ask
     for the person's electronic signature on top of the level (Pro plans and above).
+    ``require_face``: only accept the answer after the person's face is verified in
+    the notific.me app (Business plans and above with face verification turned on).
     ``locale``: your language, the one ``as_text`` comes back in (``"en"`` by
     default, ``"pt-BR"`` or ``"es"``); it does not change what the human sees.
 
@@ -205,6 +209,7 @@ def ask_to_wire(
             "escalate": [_escalation_to_wire(s) for s in escalate] if escalate is not None else None,
             "callback_url": callback_url,
             "require_signature": True if require_signature else None,
+            "require_face": True if require_face else None,
             "card": dict(card) if card is not None else None,
         }
     )
@@ -328,6 +333,7 @@ def to_ask_result(reply: Any, questions: Optional[Sequence[Mapping[str, Any]]] =
     by = reply.get("answered_by")
     sig = reply.get("signature")
     es = reply.get("e_signature")
+    fv = reply.get("face_verification")
     status = reply.get("status", "")
     return AskResult(
         id=reply.get("question_set_id", ""),
@@ -363,6 +369,15 @@ def to_ask_result(reply: Any, questions: Optional[Sequence[Mapping[str, Any]]] =
             consent_version=es.get("consent_version"),
         )
         if isinstance(es, Mapping)
+        else None,
+        face_verification=FaceVerification(
+            result=fv.get("result", ""),
+            verified_at=fv.get("verified_at", ""),
+            reason=fv.get("reason"),
+            verification_id=fv.get("verification_id"),
+            model=fv.get("model"),
+        )
+        if isinstance(fv, Mapping)
         else None,
         signature=ReplySignature(alg=sig.get("alg", ""), value=sig.get("value", ""), key_id=sig.get("key_id"))
         if isinstance(sig, Mapping)

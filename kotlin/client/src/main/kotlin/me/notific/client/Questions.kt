@@ -84,6 +84,13 @@ public data class QuestionSet(
      * `eSignatureSha256`. The signed [Reply.eSignature] carries it.
      */
     @SerialName("require_signature") val requireSignature: Boolean = false,
+    /**
+     * The answer is only accepted with the person's face verified against
+     * their enrollment in the organization ([Face]): reply with
+     * [NotificClient.reply]'s `face`. The signed [Reply.faceVerification]
+     * says how it was checked.
+     */
+    @SerialName("require_face") val requireFace: Boolean = false,
     /** The signed reply, once answered. */
     val reply: Reply? = null,
     /** Rebuilt from the signed archive (the decision left the hot database). */
@@ -143,6 +150,8 @@ public data class Reply(
     @SerialName("content_hash") val contentHash: String? = null,
     /** The electronic signature applied, when the question set had [QuestionSet.requireSignature]. */
     @SerialName("e_signature") val eSignature: ESignature? = null,
+    /** How the person's face was checked, when the question set had [QuestionSet.requireFace]. */
+    @SerialName("face_verification") val faceVerification: FaceVerification? = null,
     /** The server's signature of the whole reply (it covers [eSignature] too). */
     val signature: ReplySignature? = null,
     /** How the decision rule closed it (questions with a rule). [status] is [ReplyStatus.Rejected] when approval became impossible. */

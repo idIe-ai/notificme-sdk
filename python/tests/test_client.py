@@ -246,12 +246,41 @@ def test_ask_require_signature(client: NotificMe, server: FakeServer) -> None:
     assert r.e_signature.adopted_at == "2026-11-02T09:12:40Z"
 
 
+def test_ask_require_face(client: NotificMe, server: FakeServer) -> None:
+    face = {
+        "result": "verified",
+        "verification_id": "01a1c251-15ad-7d0e-8aac-3684e665169c",
+        "model": "yunet-2023mar+sface-2021dec",
+        "verified_at": "2026-11-10T14:03:11Z",
+    }
+    server.reply(201, ask_view("open"))
+    server.reply(200, ask_view("answered", dict(REPLY, face_verification=face)))
+    r = client.ask("Sign the contract?", QUESTIONS, to="ana", require_face=True)
+    assert server.json(0)["require_face"] is True
+    assert r.face_verification is not None
+    assert r.face_verification.result == "verified" and r.face_verification.reason is None
+    assert r.face_verification.model == "yunet-2023mar+sface-2021dec"
+    assert r.face_verification.verified_at == "2026-11-10T14:03:11Z"
+
+
+def test_ask_face_fallback(client: NotificMe, server: FakeServer) -> None:
+    face = {"result": "fallback", "reason": "not_enrolled", "verified_at": "2026-11-10T14:03:11Z"}
+    server.reply(201, ask_view("open"))
+    server.reply(200, ask_view("answered", dict(REPLY, face_verification=face)))
+    r = client.ask("Sign the contract?", QUESTIONS, require_face=True)
+    assert r.face_verification is not None
+    assert r.face_verification.result == "fallback" and r.face_verification.reason == "not_enrolled"
+    assert r.face_verification.verification_id is None
+
+
 def test_ask_without_signature(client: NotificMe, server: FakeServer) -> None:
     server.reply(201, ask_view("open"))
     server.reply(200, ask_view("answered", REPLY))
     r = client.ask("Deploy?", QUESTIONS)
     assert "require_signature" not in server.json(0)
     assert r.e_signature is None
+    assert "require_face" not in server.json(0)
+    assert r.face_verification is None
 
 
 def test_ask_single_other_is_untrusted(client: NotificMe, server: FakeServer) -> None:

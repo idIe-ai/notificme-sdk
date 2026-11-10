@@ -202,8 +202,9 @@ public class Inbox(
         totpCode: String? = null,
         idempotencyKey: String = java.util.UUID.randomUUID().toString(),
         eSignatureSha256: String? = null,
+        face: FaceProof? = null,
     ): ReplyAccepted {
-        val accepted = client.reply(questionSet, answers, authMethod, totpCode, idempotencyKey, eSignatureSha256)
+        val accepted = client.reply(questionSet, answers, authMethod, totpCode, idempotencyKey, eSignatureSha256, face)
         val decision = accepted.decision
         mutable.update { s ->
             if (!accepted.isClosed && decision != null) {

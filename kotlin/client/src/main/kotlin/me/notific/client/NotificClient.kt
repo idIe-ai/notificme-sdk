@@ -102,6 +102,9 @@ public class NotificClient(
     /** The person's own account: the electronic signature they adopt and apply to answers. */
     public val account: Account = Account(this)
 
+    /** Face verification: enrolling the person's face in an organization and proving it is them. */
+    public val face: Face = Face(this)
+
     /** The signed-in person, their workspaces and the current sync cursor. */
     public suspend fun me(): Me = call(HttpMethod.Get, "/v0/me", Me.serializer())
 
@@ -151,6 +154,15 @@ public class NotificClient(
      * `signature_required`, `signature_changed` (409: it was changed on
      * another device; show the current one again).
      *
+     * When [QuestionSet.requireFace], pass in [face] the verification the
+     * person just passed for this question set ([FaceProof.Verified], from
+     * [Face.verify]), or [FaceProof.Fallback] with [AuthMethod.Totp] and a
+     * fresh [totpCode] when the organization accepts the code instead.
+     * Errors: `face_required` (`details.enrolled`, `details.on_fail`,
+     * `details.unenrolled` say which path the person has),
+     * `face_verification_invalid` (409: expired or already used; verify
+     * again), `face_fallback_unavailable` (`details.reason`), `face_disabled`.
+     *
      * Safe to retry: the same [idempotencyKey] never creates two replies.
      */
     public suspend fun reply(
@@ -160,6 +172,7 @@ public class NotificClient(
         totpCode: String? = null,
         idempotencyKey: String = UUID.randomUUID().toString(),
         eSignatureSha256: String? = null,
+        face: FaceProof? = null,
     ): ReplyAccepted {
         val body = ReplyRequest(
             questionSetId = questionSet.id,
@@ -171,6 +184,7 @@ public class NotificClient(
             contentHash = questionSet.contentHash,
             answeredAt = Instant.now().toString(),
             eSignature = eSignatureSha256?.let(::ESignatureRef),
+            face = face?.let(FaceRef::of),
         )
         return call(
             HttpMethod.Post, "/v0/replies", ReplyAccepted.serializer(),
@@ -547,6 +561,7 @@ internal data class ReplyRequest(
     @SerialName("content_hash") val contentHash: String? = null,
     @SerialName("answered_at") val answeredAt: String? = null,
     @SerialName("e_signature") val eSignature: ESignatureRef? = null,
+    val face: FaceRef? = null,
 )
 
 @Serializable

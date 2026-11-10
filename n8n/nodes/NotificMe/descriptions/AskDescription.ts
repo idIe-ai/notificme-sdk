@@ -434,6 +434,14 @@ export const askFields: INodeProperties[] = [
 					'The person who made the request (@handle or e-mail). They see the ask but never approve their own request.',
 			},
 			{
+				displayName: 'Require Face',
+				name: 'requireFace',
+				type: 'boolean',
+				default: false,
+				description:
+					'Whether the answer is only accepted after the person verifies their face in the notific.me app, against the face they enrolled in the organization. The answer reports it in face_verification. Business plans and above, with face verification turned on.',
+			},
+			{
 				displayName: 'Require Signature',
 				name: 'requireSignature',
 				type: 'boolean',

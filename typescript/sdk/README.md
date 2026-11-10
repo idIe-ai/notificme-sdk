@@ -184,6 +184,22 @@ r.eSignature; // { name, initials, method: "typed" | "drawn", signaturePng, sign
 
 The signature (PNG images in base64 and their SHA-256) is part of the signed reply, so it is covered by the server signature like every other field.
 
+### Asking for a verified face
+
+Set `requireFace: true` and the answer is only accepted after the person verifies their face in the notific.me app, against the face they enrolled in the organization (a 1:1 check done on the server). Business plans and above, with face verification turned on by the organization (`plan_required` or `face_disabled` otherwise).
+
+```ts
+const r = await notific.ask({
+  to: "ana",
+  title: "Sign the supplier contract?",
+  questions: [{ id: "sign", type: "yesno", text: "Do you sign it?" }],
+  requireFace: true,
+});
+r.faceVerification; // { result: "verified" | "fallback", reason?, verificationId?, model?, verifiedAt }
+```
+
+`result: "fallback"` means the face was **not** verified: the organization accepts the authenticator code from people who ran out of attempts (`reason: "attempts_exhausted"`) or never enrolled their face (`reason: "not_enrolled"`). Check it when a face match is what you need. No biometric data and no score ever come back.
+
 ## Person tokens for your own app
 
 Your people may live in your own system (intranet, ERP, help desk) and never open notific.me. With a person token, your app shows their notific.me inbox and lets them answer decisions inside your own screens:

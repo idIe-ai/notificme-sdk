@@ -50,6 +50,11 @@
       "default": false,
       "description": "Ask the person to sign the answer with their electronic signature (typed in a cursive style or drawn) and initials, on top of the verification level. The signed reply carries it in e_signature. Pro plans and above."
     },
+    "require_face": {
+      "type": "boolean",
+      "default": false,
+      "description": "Only accept the answer after the person's face is verified against the one they enrolled in the organization (1:1 check, in the notific.me app), on top of the verification level. The signed reply reports it in face_verification. Business plans and above, with face verification turned on by the organization."
+    },
     "card": { "$ref": "card.schema.json" }
   },
   "$defs": {

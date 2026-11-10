@@ -98,7 +98,8 @@ public class People internal constructor(private val client: NotificClient) {
      * people than the plan allows in one send), `validation_failed` (with
      * the paths in [NotificMeApiException.fieldErrors], e.g. an unknown
      * group or authority level at `/to/2`), `plan_required` (a
-     * questionnaire with [Compose.requireSignature] below the Pro plan).
+     * questionnaire with [Compose.requireSignature] below the Pro plan, or
+     * [Compose.requireFace] below Business), `face_disabled`.
      */
     public suspend fun send(compose: Compose): ComposeResult =
         client.call(HttpMethod.Post, "/v0/me/compose", ComposeResult.serializer(),
@@ -367,6 +368,13 @@ public data class Compose(
      * fails with `plan_required` (`details.feature = "e_signature"`).
      */
     @SerialName("require_signature") val requireSignature: Boolean = false,
+    /**
+     * Questionnaire: each answer is only accepted with the person's face
+     * verified ([Face]). Members only, Business plans and above with face
+     * verification turned on; otherwise `plan_required`
+     * (`details.feature = "face_verification"`) or `face_disabled`.
+     */
+    @SerialName("require_face") val requireFace: Boolean = false,
 ) {
     public companion object {
         public const val MESSAGE: String = "message"
@@ -474,6 +482,8 @@ public data class SentResponse(
     val answers: List<SentAnswer> = emptyList(),
     /** The signature they applied, when the questionnaire asked for one (with the images). */
     @SerialName("e_signature") val eSignature: ESignature? = null,
+    /** How their face was checked, when the questionnaire asked for it. */
+    @SerialName("face_verification") val faceVerification: FaceVerification? = null,
 )
 
 /** `GET /v0/me/sent/{id}`. */
@@ -494,6 +504,8 @@ public data class SentDetail(
     val answers: List<SentResponse> = emptyList(),
     /** The questionnaire asked each person for their electronic signature. */
     @SerialName("require_signature") val requireSignature: Boolean = false,
+    /** The questionnaire asked for each person's face to be verified. */
+    @SerialName("require_face") val requireFace: Boolean = false,
 )
 
 /** A questionnaire saved to reuse. */

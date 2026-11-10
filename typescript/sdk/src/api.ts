@@ -88,7 +88,17 @@ export interface Reply {
   decision?: WireReplyDecision;
   votes?: WireVote[];
   e_signature?: WireESignature;
+  face_verification?: WireFaceVerification;
   signature: WireReplySignature;
+}
+
+/** `reply.face_verification` (reply.schema.json). */
+export interface WireFaceVerification {
+  result: "verified" | "fallback";
+  reason?: "attempts_exhausted" | "not_enrolled";
+  verification_id?: string;
+  model?: string;
+  verified_at: Timestamp;
 }
 
 /** `reply.e_signature` (reply.schema.json). */
@@ -131,6 +141,8 @@ export interface AskView {
   decision?: WireDecisionView;
   /** The question set asked for the person's electronic signature (only when `true`). */
   require_signature?: boolean;
+  /** The question set asked for the person's face to be verified (only when `true`). */
+  require_face?: boolean;
   /** Present when `answered` or `timeout`. */
   reply?: Reply;
 }
