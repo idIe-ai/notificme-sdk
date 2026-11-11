@@ -93,7 +93,8 @@ public data class InboxSnapshot(
 ) {
     public companion object {
         /** Bump when [Notification] gains a field the feed sends: caches older than it resync once. */
-        public const val SCHEMA: Int = 1
+        // 2: [Notification.sourceIconUrl] (and [Notification.sourceName] for people).
+        public const val SCHEMA: Int = 2
     }
 }
 

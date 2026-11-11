@@ -695,4 +695,26 @@ class ClientTest {
         assertNull(plain.sourceName)
         assertNull(Wire.json.decodeFromString(Notification.serializer(), """{"id":"n3"}""").sourceName)
     }
+
+    @Test
+    fun notificationCarriesTheSenderImage() {
+        val service = Wire.json.decodeFromString(
+            Notification.serializer(),
+            """{"id":"n1","source":"erp","source_name":"ERP","source_icon_url":"/v0/avatars/0123456789abcdef0123456789abcdef.png"}""",
+        )
+        assertEquals("/v0/avatars/0123456789abcdef0123456789abcdef.png", service.sourceIconUrl)
+        assertFalse(service.fromPerson)
+        val person = Wire.json.decodeFromString(
+            Notification.serializer(),
+            """{"id":"n2","source":"@nina","source_name":"Nina Rocha","source_kind":"person"}""",
+        )
+        assertEquals("Nina Rocha", person.sourceName)
+        assertNull(person.sourceIconUrl)
+        assertTrue(person.fromPerson)
+        // A service's event that says "@ceo" stays a service.
+        val spoof = Wire.json.decodeFromString(Notification.serializer(), """{"id":"n3","source":"@ceo","source_kind":"service"}""")
+        assertFalse(spoof.fromPerson)
+        // An older server (no source_kind): the "@" decides.
+        assertTrue(Wire.json.decodeFromString(Notification.serializer(), """{"id":"n4","source":"@nina"}""").fromPerson)
+    }
 }

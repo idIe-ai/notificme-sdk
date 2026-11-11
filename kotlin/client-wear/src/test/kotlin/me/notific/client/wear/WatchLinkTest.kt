@@ -21,6 +21,14 @@ class WatchLinkTest {
     }
 
     @Test
+    fun `link request names the accounts the watch already has`() {
+        assertEquals(setOf("a1", "a2"), WatchLink.decodeLinkRequest(WatchLink.encodeLinkRequest(listOf("a1", "a2", "a1"))))
+        // An older watch sends nothing: codes for every account.
+        assertEquals(emptySet(), WatchLink.decodeLinkRequest(ByteArray(0)))
+        assertEquals(emptySet(), WatchLink.decodeLinkRequest("garbage".toByteArray()))
+    }
+
+    @Test
     fun `relay carries what the wrist needs, in few bytes`() {
         val item = RelayItem(
             accountId = "a1", id = "n1", severity = Severity.Critical, title = "Servidor fora do ar",

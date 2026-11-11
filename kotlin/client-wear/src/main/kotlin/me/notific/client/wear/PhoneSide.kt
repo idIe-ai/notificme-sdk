@@ -104,9 +104,10 @@ public class PhoneLink(context: Context) {
 public abstract class PhoneBridgeService : WearableListenerService() {
     /**
      * The watch [nodeId] asks to be linked: return a code for each account to
-     * link (`NotificClient.createDeviceLinkCode`), or none. Runs off the main thread.
+     * link (`NotificClient.createDeviceLinkCode`) except those it already has
+     * ([linked], by account id), or none. Runs off the main thread.
      */
-    protected abstract suspend fun linkCodes(nodeId: String): List<LinkCode>
+    protected abstract suspend fun linkCodes(nodeId: String, linked: Set<String>): List<LinkCode>
 
     /** The watch [nodeId] handled an item ("got it", answered, being read, snoozed): stop ringing for it here. */
     protected open fun onHandled(nodeId: String, handled: Handled) {}
@@ -116,7 +117,8 @@ public abstract class PhoneBridgeService : WearableListenerService() {
         when (event.path) {
             // Always answers, even with no code (signed out, server unreachable): the watch then offers plan B.
             WatchLink.PATH_LINK_REQUEST -> runBlocking {
-                PhoneLink(this@PhoneBridgeService).sendLinkCodes(linkCodes(node), node)
+                val linked = WatchLink.decodeLinkRequest(event.data ?: ByteArray(0))
+                PhoneLink(this@PhoneBridgeService).sendLinkCodes(linkCodes(node, linked), node)
             }
             WatchLink.PATH_HANDLED -> WatchLink.decodeHandled(event.data ?: return)?.let { onHandled(node, it) }
             // The watch asks to show one of its screens over everything: only on itself, only its own screens.

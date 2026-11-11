@@ -37,11 +37,13 @@ public class WatchLinkClient(context: Context) {
     }
 
     /**
-     * Asks the phone for one-time codes; they arrive as a message
-     * ([PhoneEventsService.onLinkCodes]). Returns how many phones were asked
-     * (0: no phone with the app is reachable; use `Auth.startDeviceLink`).
+     * Asks the phone for one-time codes for the accounts not [linked] here
+     * yet; they arrive as a message ([PhoneEventsService.onLinkCodes], empty
+     * when there's nothing new). Returns how many phones were asked (0: no
+     * phone with the app is reachable; use `Auth.startDeviceLink`).
      */
-    public suspend fun requestLink(): Int = sendToPhones(WatchLink.PATH_LINK_REQUEST, ByteArray(0))
+    public suspend fun requestLink(linked: Collection<String> = emptyList()): Int =
+        sendToPhones(WatchLink.PATH_LINK_REQUEST, WatchLink.encodeLinkRequest(linked))
 
     /** Handled on the watch ("got it", answered, being read, snoozed): the phones stop ringing for it. */
     public suspend fun handled(handled: Handled): Int = sendToPhones(WatchLink.PATH_HANDLED, WatchLink.encodeHandled(handled))

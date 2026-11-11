@@ -42,11 +42,33 @@ public data class Notification(
     /** When the person gave "got it" on this (critical) alert, on any of their devices. */
     @SerialName("acknowledged_at") val acknowledgedAt: String? = null,
     /**
-     * Display name of the workspace service whose slug is [source] (`ERP` for
-     * `erp`); null when the source is not a named service. Show this, not the slug.
+     * Display name of who sent it: the workspace service whose slug is
+     * [source] (`ERP` for `erp`) or, from a person (`@nina`), their name; null
+     * when there is none. Show this, not the slug.
      */
     @SerialName("source_name") val sourceName: String? = null,
+    /**
+     * Image of who sent it, a path on the API (`/v0/avatars/…`, resolve it
+     * with [NotificClient.urlOf]): the person's photo; from a service, its icon
+     * or else the logo of the organization it belongs to. Null = show the
+     * initials. A message never changes it (the card's icon stays in the card).
+     */
+    @SerialName("source_icon_url") val sourceIconUrl: String? = null,
+    /**
+     * `person` when notific.me itself sent it on a person's behalf (a message,
+     * a question or a contact notice from `@handle`); `service` otherwise,
+     * even when a service's event says `@someone` as the source. Null from an
+     * older server: use [fromPerson].
+     */
+    @SerialName("source_kind") val sourceKind: String? = null,
 ) {
+    /**
+     * Sent by a person: show their name and photo, and on Android make it a
+     * conversation. Trusts [sourceKind]; only an older server falls back to an
+     * `@` source.
+     */
+    public val fromPerson: Boolean get() = sourceKind?.let { it == "person" } ?: source.startsWith("@")
+
     /** No delivery of it was read yet. */
     public val unread: Boolean get() = deliveries.isNotEmpty() && deliveries.all { it.readAt == null }
 

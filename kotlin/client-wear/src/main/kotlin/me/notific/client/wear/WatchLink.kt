@@ -59,6 +59,14 @@ public object WatchLink {
     /** How long a [RelayItem.summary] may be; longer text is cut and [RelayItem.longText] is set. */
     public const val SUMMARY_MAX: Int = 280
 
+    /** The link request: the accounts the watch already has, so the phone sends codes only for the others. */
+    public fun encodeLinkRequest(linked: Collection<String>): ByteArray =
+        encode(LinkRequest.serializer(), LinkRequest(VERSION, linked.distinct()))
+
+    /** The accounts the watch already has; empty for an older watch's empty request (codes for all). */
+    public fun decodeLinkRequest(bytes: ByteArray): Set<String> =
+        if (bytes.isEmpty()) emptySet() else decode(LinkRequest.serializer(), bytes)?.linked.orEmpty().toSet()
+
     public fun encodeLinkCodes(codes: List<LinkCode>): ByteArray = encode(LinkCodes.serializer(), LinkCodes(VERSION, codes))
 
     public fun decodeLinkCodes(bytes: ByteArray): List<LinkCode> = decode(LinkCodes.serializer(), bytes)?.codes.orEmpty()
@@ -200,6 +208,9 @@ public data class Handled(
     /** It stops for good on the other side (not only the alarm). */
     public val done: Boolean get() = kind == Kind.Acknowledged || kind == Kind.Answered || kind == Kind.Read
 }
+
+@Serializable
+internal data class LinkRequest(val version: Int = WatchLink.VERSION, val linked: List<String> = emptyList())
 
 @Serializable
 internal data class LinkCodes(val version: Int = WatchLink.VERSION, val codes: List<LinkCode> = emptyList())
