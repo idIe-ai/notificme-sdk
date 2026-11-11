@@ -153,7 +153,7 @@ public fun WearDecisionCard(
     val title = questionSet.title.ifBlank { questionSet.questions.firstOrNull()?.text.orEmpty() }
     WearInboxCard(
         title = wearMarkdown(title).text,
-        subtitle = wearMarkdown(questionSet.context.orEmpty()).text,
+        subtitle = wearPlain(questionSet.context.orEmpty()),
         onClick = onClick,
         modifier = modifier,
         origin = origin,

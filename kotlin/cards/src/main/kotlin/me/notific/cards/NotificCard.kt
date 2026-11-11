@@ -138,6 +138,9 @@ public fun lightMarkdown(text: String): AnnotatedString = lightMarkdown(text, li
  * follows in [hostColor], so no one can hide an address behind a name.
  * With [markdown] false (a notification summary) only bare addresses become
  * links.
+ *
+ * Inline marks only: lists and quotes stay as written. For a card `text`
+ * block or a question's `context`, use [LightMarkdownText], which draws them.
  */
 public fun lightMarkdown(
     text: String,
@@ -146,7 +149,17 @@ public fun lightMarkdown(
     codeBackground: Color = Color.Unspecified,
     markdown: Boolean = true,
 ): AnnotatedString = buildAnnotatedString {
-    for (span in InlineMarkdown.parse(text, markdown)) {
+    appendSpans(InlineMarkdown.parse(text, markdown), linkColor, hostColor, codeBackground)
+}
+
+/** Appends [spans] as [lightMarkdown] styles them. */
+internal fun AnnotatedString.Builder.appendSpans(
+    spans: List<InlineSpan>,
+    linkColor: Color,
+    hostColor: Color,
+    codeBackground: Color,
+) {
+    for (span in spans) {
         when (span) {
             is InlineSpan.Text -> emphasized(span.bold, span.italic) { append(span.text) }
             is InlineSpan.Code -> withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = codeBackground)) { append(span.text) }
@@ -187,7 +200,7 @@ public fun rememberLightMarkdown(text: String, markdown: Boolean = true): Annota
 
 @Composable
 private fun TextBlock(block: Block.Text) {
-    Text(rememberLightMarkdown(block.text), style = MaterialTheme.typography.bodyMedium)
+    LightMarkdownText(block.text, style = MaterialTheme.typography.bodyMedium)
 }
 
 @Composable

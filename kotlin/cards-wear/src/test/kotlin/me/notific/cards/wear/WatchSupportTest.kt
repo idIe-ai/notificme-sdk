@@ -175,5 +175,13 @@ class WatchSupportTest {
         assertEquals("12,5", formatCardValue(JsonPrimitive(12.5), Locale.forLanguageTag("pt-BR")))
         assertEquals("99.9%", formatCardValue(JsonPrimitive("99.9%")))
         assertEquals("Deploy prod now (example.com)", wearMarkdown("Deploy **prod** [now](https://example.com/x)").text)
+        // Inline only: a list stays as written there.
+        assertEquals("- a", wearMarkdown("- a").text)
+    }
+
+    @Test
+    fun `decision row text keeps lists and quotes readable`() {
+        assertEquals("Why:\n• a doc (x.com)\n10. b\nc", wearPlain("Why:\n- **a** [doc](https://x.com/d)\n10) b\n> c"))
+        assertEquals("- x", wearPlain("\\- x"))
     }
 }

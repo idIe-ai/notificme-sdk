@@ -6,25 +6,61 @@ import java.net.URI
  * Light Markdown of the card protocol: what the `text` block and a question's
  * `context` may use.
  *
+ * Inline marks:
  * - `**bold**`, `*italic*` (or `_italic_`), `` `code` ``;
  * - `[label](https://…)` and a bare http(s) address, which becomes a link;
  * - `\` before one of those marks shows the mark as text;
  * - line breaks are kept.
  *
- * Nothing else: no HTML, no images, no headings or lists. Links only with
- * http or https; any other scheme shows just the label, as text. A
- * notification `summary` is not Markdown: with `markdown = false` only bare
- * addresses become links.
+ * Blocks, read line by line (split on `\n`), before the inline marks ([blocks]):
+ * - `- item` at column 0: a bullet item;
+ * - `1. item` or `1) item` (1 to 3 digits) at column 0: a numbered item, the
+ *   number kept as written (never renumbered);
+ * - `>` at column 0, then an optional space: a quote line;
+ * - consecutive lines of the same kind form one list or one quote; an empty
+ *   line, or a line of another kind, ends it;
+ * - any other line is paragraph text, as before (line breaks and empty lines
+ *   kept); `\- `, `\>` and `\1. ` at the start show the marker as text.
  *
- * The same algorithm runs on the web (`packages/ui/src/lib/inlineMarkdown.ts`):
- * change both together.
+ * Nothing else: no HTML, no images, no headings, no tables, no nesting (a
+ * marker after leading spaces is text). Links only with http or https; any
+ * other scheme shows just the label, as text. A notification `summary` is not
+ * Markdown: with `markdown = false` only bare addresses become links, and
+ * there are no blocks.
+ *
+ * The same algorithm runs on the web (`packages/ui/src/lib/inlineMarkdown.ts`)
+ * and on the server (`server/internal/protocol/markdown.go`): change the three
+ * together.
  */
 public object InlineMarkdown {
-    /** Splits [text] into spans (see [InlineMarkdown]). */
+    /** Splits [text] into spans (see [InlineMarkdown]), without the block rules. */
     public fun parse(text: String, markdown: Boolean = true): List<InlineSpan> = Parser(text, markdown).run()
 
-    /** Clean text without marks (`[x](url)` → `x`), for push, full-screen alerts and list previews. */
-    public fun plain(text: String): String = parse(text).joinToString("") { it.text }
+    /**
+     * Splits [text] into paragraphs, lists and quotes (see [InlineMarkdown]),
+     * each with its inline spans. With [markdown] false (a notification
+     * summary) the whole text is one [MdBlock.Text] of [parse].
+     */
+    public fun blocks(text: String, markdown: Boolean = true): List<MdBlock> =
+        if (markdown) BlockParser.run(text) else listOf(MdBlock.Text(parse(text, markdown = false)))
+
+    /**
+     * Clean text without marks (`[x](url)` → `x`), for push, full-screen
+     * alerts and list previews. A bullet item becomes `• item`, a numbered
+     * one `3. item` (the number as written) and a quote line just its text;
+     * lines stay separated by `\n`.
+     */
+    public fun plain(text: String): String = blocks(text).joinToString("\n") { block ->
+        when (block) {
+            is MdBlock.Text -> block.spans.plain()
+            is MdBlock.ListBlock -> block.items.joinToString("\n") { item ->
+                (if (item.number != null) "${item.number}. " else "• ") + item.spans.plain()
+            }
+            is MdBlock.Quote -> block.lines.joinToString("\n") { it.plain() }
+        }
+    }
+
+    private fun List<InlineSpan>.plain(): String = joinToString("") { it.text }
 
     /** Normalized http(s) URL, or null for any other scheme or an invalid one. */
     public fun safeUrl(url: String): String? {
@@ -36,6 +72,83 @@ public object InlineMarkdown {
     }
 
     internal fun hostOf(url: String): String = runCatching { URI(url).host.orEmpty() }.getOrDefault("")
+}
+
+/** A block of [InlineMarkdown] text ([InlineMarkdown.blocks]). */
+public sealed interface MdBlock {
+    /**
+     * Paragraph text: one or more lines, joined by `\n` and parsed together,
+     * as before blocks existed (an empty line is kept, as spacing).
+     */
+    public data class Text(val spans: List<InlineSpan>) : MdBlock
+
+    /** A bullet list ([ordered] false) or a numbered one. No nesting. */
+    public data class ListBlock(val ordered: Boolean, val items: List<Item>) : MdBlock {
+        /** One item: [number] as written (`3`, `10`), null in a bullet list. */
+        public data class Item(val number: String?, val spans: List<InlineSpan>)
+    }
+
+    /** A quote: its lines without the `>`, each with its spans. */
+    public data class Quote(val lines: List<List<InlineSpan>>) : MdBlock
+}
+
+/** Groups the lines of a text into [MdBlock]s; the spans of each come from [Parser]. */
+private object BlockParser {
+    private val NUMBERED = Regex("^(\\d{1,3})[.)] ")
+
+    private sealed interface Line {
+        class Para(val text: String) : Line
+        class Item(val number: String?, val text: String) : Line
+        class Quote(val text: String) : Line
+    }
+
+    private fun classify(line: String): Line {
+        if (line.startsWith("- ")) return Line.Item(null, line.substring(2))
+        NUMBERED.find(line)?.let { m -> return Line.Item(m.groupValues[1], line.substring(m.range.last + 1)) }
+        if (line.startsWith(">")) return Line.Quote(line.substring(if (line.startsWith("> ")) 2 else 1))
+        // `\- x`, `\> x`, `\1. x`: the marker shown as text, without the backslash.
+        if (line.startsWith("\\") && classify(line.substring(1)) !is Line.Para) return Line.Para(line.substring(1))
+        return Line.Para(line)
+    }
+
+    private fun inline(text: String): List<InlineSpan> = Parser(text, markdown = true).run()
+
+    fun run(text: String): List<MdBlock> {
+        val out = mutableListOf<MdBlock>()
+        val para = mutableListOf<String>()
+        val items = mutableListOf<MdBlock.ListBlock.Item>()
+        val quote = mutableListOf<List<InlineSpan>>()
+
+        fun flush() {
+            if (para.isNotEmpty()) out += MdBlock.Text(inline(para.joinToString("\n")))
+            if (items.isNotEmpty()) out += MdBlock.ListBlock(ordered = items.first().number != null, items = items.toList())
+            if (quote.isNotEmpty()) out += MdBlock.Quote(quote.toList())
+            para.clear()
+            items.clear()
+            quote.clear()
+        }
+
+        for (raw in text.split("\n")) {
+            when (val line = classify(raw)) {
+                is Line.Para -> {
+                    if (items.isNotEmpty() || quote.isNotEmpty()) flush()
+                    para += line.text
+                }
+                is Line.Item -> {
+                    // A bullet after a numbered item (or the other way round) starts another list.
+                    val sameList = items.isNotEmpty() && (items.first().number != null) == (line.number != null)
+                    if (!sameList) flush()
+                    items += MdBlock.ListBlock.Item(line.number, inline(line.text))
+                }
+                is Line.Quote -> {
+                    if (para.isNotEmpty() || items.isNotEmpty()) flush()
+                    quote += inline(line.text)
+                }
+            }
+        }
+        flush()
+        return out
+    }
 }
 
 /** A piece of [InlineMarkdown] text. */

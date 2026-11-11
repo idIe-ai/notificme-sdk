@@ -18,20 +18,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -47,6 +54,7 @@ import me.notific.client.Block
 import me.notific.client.Card
 import me.notific.client.InlineMarkdown
 import me.notific.client.InlineSpan
+import me.notific.client.MdBlock
 import me.notific.client.Severity
 
 /** Colors of the severities on a dark watch face: red, orange, amber, blue, gray. */
@@ -69,9 +77,122 @@ public object WearSeverity {
 /**
  * Light Markdown for the watch: bold, italic and code. Links can't be opened
  * on a watch, so they are plain text (with the domain when the label hides it).
+ *
+ * Inline marks only: lists and quotes stay as written. For a card `text`
+ * block or a question's `context`, use [WearMarkdownText], which draws them.
  */
 public fun wearMarkdown(text: String): AnnotatedString = buildAnnotatedString {
-    for (span in InlineMarkdown.parse(text)) {
+    appendWearSpans(InlineMarkdown.parse(text))
+}
+
+/**
+ * Light Markdown ([InlineMarkdown]) with its blocks, compact for a round
+ * screen: a list item is a line that starts with "•" (in [accent]) or its
+ * number as written, wrapped lines aligned with the text; a quote has a thin
+ * bar at its left and its text in [secondary]. Paragraphs follow [textAlign];
+ * lists and quotes start at the left. Inline marks as in [wearMarkdown].
+ */
+@Composable
+public fun WearMarkdownText(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: TextStyle = MaterialTheme.typography.bodyMedium,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    textAlign: TextAlign? = null,
+    accent: Color = MaterialTheme.colorScheme.primary,
+    secondary: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    val blocks = remember(text) { InlineMarkdown.blocks(text) }
+    val single = blocks.singleOrNull()
+    if (single is MdBlock.Text) {
+        Text(remember(single) { buildAnnotatedString { appendWearSpans(single.spans) } }, modifier, color = color, textAlign = textAlign, style = style)
+        return
+    }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (block in blocks) {
+            when (block) {
+                is MdBlock.Text -> Text(
+                    remember(block) { buildAnnotatedString { appendWearSpans(block.spans) } },
+                    Modifier.fillMaxWidth(),
+                    color = color,
+                    textAlign = textAlign,
+                    style = style,
+                )
+                is MdBlock.ListBlock -> WearItems(block, style, color, accent, secondary)
+                is MdBlock.Quote -> Text(
+                    remember(block) {
+                        buildAnnotatedString {
+                            block.lines.forEachIndexed { i, line ->
+                                if (i > 0) append('\n')
+                                appendWearSpans(line)
+                            }
+                        }
+                    },
+                    Modifier
+                        .fillMaxWidth()
+                        .drawBehind {
+                            drawRoundRect(
+                                secondary.copy(alpha = 0.45f),
+                                size = Size(2.dp.toPx(), size.height),
+                                cornerRadius = CornerRadius(1.dp.toPx()),
+                            )
+                        }
+                        .padding(start = 8.dp),
+                    color = secondary,
+                    style = style,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WearItems(block: MdBlock.ListBlock, style: TextStyle, color: Color, accent: Color, secondary: Color) {
+    val markers = remember(block) { block.items.map { item -> item.number?.let { "$it." } ?: "•" } }
+    val markerStyle = style.copy(fontFeatureSettings = "tnum")
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val markerWidth = remember(markers, markerStyle, density) {
+        with(density) { markers.maxOf { measurer.measure(it, markerStyle).size.width }.toDp() }
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        block.items.forEachIndexed { i, item ->
+            Row {
+                Text(
+                    markers[i],
+                    Modifier.width(markerWidth).alignByBaseline(),
+                    color = if (block.ordered) secondary else accent,
+                    textAlign = TextAlign.End,
+                    style = markerStyle,
+                )
+                Spacer(Modifier.width(5.dp))
+                Text(
+                    remember(item) { buildAnnotatedString { appendWearSpans(item.spans) } },
+                    Modifier.weight(1f).alignByBaseline(),
+                    color = color,
+                    style = style,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * [text] in one plain string for a two-line inbox row: list items as
+ * `• item` or `3. item`, quote lines as their text, links as in [wearMarkdown]
+ * (with the domain when the label hides it).
+ */
+internal fun wearPlain(text: String): String = InlineMarkdown.blocks(text).joinToString("\n") { block ->
+    fun line(spans: List<InlineSpan>) = buildAnnotatedString { appendWearSpans(spans) }.text
+    when (block) {
+        is MdBlock.Text -> line(block.spans)
+        is MdBlock.ListBlock -> block.items.joinToString("\n") { (if (it.number != null) "${it.number}. " else "• ") + line(it.spans) }
+        is MdBlock.Quote -> block.lines.joinToString("\n") { line(it) }
+    }
+}
+
+private fun AnnotatedString.Builder.appendWearSpans(spans: List<InlineSpan>) {
+    for (span in spans) {
         when (span) {
             is InlineSpan.Text -> withStyle(
                 SpanStyle(
@@ -123,10 +244,11 @@ public fun formatCardValue(value: JsonPrimitive, locale: Locale = Locale.getDefa
 public fun WearBlock(block: Block, modifier: Modifier = Modifier, accent: Color = MaterialTheme.colorScheme.primary) {
     Box(modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
         when (block) {
-            is Block.Text -> Text(
-                remember(block.text) { wearMarkdown(block.text) },
+            is Block.Text -> WearMarkdownText(
+                block.text,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                accent = accent,
             )
             is Block.Metric -> MetricBlock(block)
             is Block.Chart -> SparkBlock(block, accent)
