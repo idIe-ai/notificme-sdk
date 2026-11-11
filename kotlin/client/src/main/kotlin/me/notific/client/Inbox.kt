@@ -94,7 +94,8 @@ public data class InboxSnapshot(
     public companion object {
         /** Bump when [Notification] gains a field the feed sends: caches older than it resync once. */
         // 2: [Notification.sourceIconUrl] (and [Notification.sourceName] for people).
-        public const val SCHEMA: Int = 2
+        // 3: the icon comes from the service that sent it, not from the source text.
+        public const val SCHEMA: Int = 3
     }
 }
 

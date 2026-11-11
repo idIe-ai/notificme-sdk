@@ -4,6 +4,7 @@
 
 ### Added
 
+- `Notification.sourceIconUrl` now comes from the service that sent the event or question (the token's owner), so a service whose events carry another `source` text (`confirmo` from the service `confirmo.com.br`) still shows its icon, and no service can borrow another's icon through the `source` text. `InboxSnapshot.SCHEMA` = 3: caches resync once to get it.
 - `Notification.sourceIconUrl`: the image of who sent it (`source_icon_url` from `GET /v0/sync`, a path to resolve with `NotificClient.urlOf`): the person's photo; from a service, its icon (set by the workspace owner) or else the logo of the organization it belongs to; null = show the initials. `Notification.sourceName` now also carries a person's name for messages from `@handle`, and `Notification.sourceKind` (`person` or `service`) with `Notification.fromPerson` tell a person from a service (a service's event with source `@someone` stays a service). `InboxSnapshot.SCHEMA` = 2, so caches resync once and get them.
 - `Notification.sourceName`: the display name of the service that sent it (`ERP` for source `erp`), from `GET /v0/sync` (`source_name`); null when the source is not a named service.
 - `InboxSnapshot.schema` (`InboxSnapshot.SCHEMA` = 1): a cache saved by an older SDK is shown at once, then synced again from cursor 0 once and replaced, so notifications cached before a new field (like `sourceName`) get it. Costs one full sync after the update.
