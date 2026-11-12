@@ -61,6 +61,14 @@ public data class Notification(
      * older server: use [fromPerson].
      */
     @SerialName("source_kind") val sourceKind: String? = null,
+    /**
+     * Why it waits for this person (an open decision, a questionnaire, a
+     * message or critical alert without "got it"), as the server saw it when
+     * it sent the notification; null = not waiting (or an older server). Use
+     * [InboxState.isWaiting], which also knows when the question closed. A
+     * waiting item never leaves the inbox by a batch action or a rule.
+     */
+    val waiting: InboxWaiting? = null,
 ) {
     /**
      * Sent by a person: show their name and photo, and on Android make it a
@@ -141,6 +149,10 @@ public enum class SyncEntity {
     @SerialName("delivery") Delivery,
     @SerialName("question_set") QuestionSet,
     @SerialName("answer_set") AnswerSet,
+    /** The person's marks on a notification ([InboxMark]); id = notification id. */
+    @SerialName("inbox_mark") InboxMark,
+    /** A personal inbox rule ([InboxRule]). */
+    @SerialName("inbox_rule") InboxRule,
     @SerialName("unknown") Unknown,
 }
 

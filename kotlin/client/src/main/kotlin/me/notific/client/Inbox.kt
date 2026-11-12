@@ -31,6 +31,15 @@ public data class InboxState(
      * answered, timeout, cancelled…), from the feed or asked once.
      */
     val ended: Map<String, QuestionSetStatus> = emptyMap(),
+    /** The person's marks (seen, archived, pinned) by notification id, the same on every device. */
+    val marks: Map<String, InboxMark> = emptyMap(),
+    /**
+     * The person's inbox rules, as the feed sent them. After a full resync
+     * older rules may be missing: call [Inbox.reloadRules] (own session only).
+     */
+    val rules: List<InboxRule> = emptyList(),
+    /** Changes of marks made offline, already in [marks], still to be sent (they go when the network is back). */
+    val queuedMarks: Int = 0,
 ) {
     /**
      * How the decision carried by [n] ended: null for a plain notification or
@@ -49,12 +58,49 @@ public data class InboxState(
         }
     }
 
-    /** Unread notifications that are not an open decision (those count once, as a question). */
+    /**
+     * Unread notifications in the inbox (not archived) that are not an open
+     * decision (those count once, as a question). Unread = not opened and not
+     * marked seen ([isUnread]).
+     */
     val unreadCount: Int
         get() {
             val open = questions.mapTo(HashSet()) { it.id }
-            return notifications.count { it.unread && (it.questionSetId == null || it.questionSetId !in open) }
+            return notifications.count { isUnread(it) && !isArchived(it) && (it.questionSetId == null || it.questionSetId !in open) }
         }
+
+    /** The person's marks on [n], if any. */
+    public fun markOf(n: Notification): InboxMark? = marks[n.id]
+
+    /** Not opened on any device and not marked seen (docs/27, D2). */
+    public fun isUnread(n: Notification): Boolean = n.unread && marks[n.id]?.seen != true
+
+    /** Archived (by the person or a rule); a waiting item is never archived. */
+    public fun isArchived(n: Notification): Boolean = marks[n.id]?.archived == true && !isWaiting(n)
+
+    public fun isPinned(n: Notification): Boolean = marks[n.id]?.pinned == true
+
+    /**
+     * Still waiting for the person (the "Waiting for you" band): what the
+     * server said ([Notification.waiting]), unless the question already ended
+     * or the "got it" was given since.
+     */
+    public fun isWaiting(n: Notification): Boolean = when (n.waiting) {
+        null -> false
+        InboxWaiting.Decision, InboxWaiting.Questionnaire -> {
+            val end = decisionEnd(n)
+            end == null || (end == QuestionSetStatus.Unknown && n.status == "active")
+        }
+        InboxWaiting.Ack, InboxWaiting.Alert -> n.acknowledgedAt == null && n.status == "active"
+    }
+
+    /** Waiting items, newest first. */
+    val waitingItems: List<Notification> get() = notifications.filter { isWaiting(it) }
+
+    /** The rule that applies to [n]: its type's rule, else its service's; null = the defaults. */
+    public fun ruleFor(n: Notification): InboxRule? =
+        rules.firstOrNull { it.workspaceId == n.workspaceId && it.source == n.source && it.type == n.type }
+            ?: rules.firstOrNull { it.workspaceId == n.workspaceId && it.source == n.source && it.type == null }
 
     /** The notification that carries [questionSetId], if any. */
     public fun notificationFor(questionSetId: String): Notification? =
@@ -83,6 +129,12 @@ public data class InboxSnapshot(
     @SerialName("user_id") val userId: String? = null,
     /** See [InboxState.ended]. */
     val ended: Map<String, QuestionSetStatus> = emptyMap(),
+    /** See [InboxState.marks]. */
+    val marks: List<InboxMark> = emptyList(),
+    /** See [InboxState.rules]. */
+    val rules: List<InboxRule> = emptyList(),
+    /** Changes of marks made offline, still to be sent, in order. */
+    @SerialName("pending_marks") val pendingMarks: List<PendingInboxMark> = emptyList(),
     /**
      * Version of what a cached notification carries. A snapshot saved by an
      * older SDK (missing = 0) is shown at once but synced again from the start
@@ -95,7 +147,8 @@ public data class InboxSnapshot(
         /** Bump when [Notification] gains a field the feed sends: caches older than it resync once. */
         // 2: [Notification.sourceIconUrl] (and [Notification.sourceName] for people).
         // 3: the icon comes from the service that sent it, not from the source text.
-        public const val SCHEMA: Int = 3
+        // 4: [Notification.waiting] and the inbox marks and rules (docs/27).
+        public const val SCHEMA: Int = 4
     }
 }
 
@@ -141,6 +194,22 @@ public class Inbox(
     private val lock = Mutex()
     private val byId = LinkedHashMap<String, Notification>()
     private val ended = HashMap<String, QuestionSetStatus>()
+    private val marks = HashMap<String, InboxMark>()
+    private val rules = LinkedHashMap<String, InboxRule>()
+
+    /** Marks asked for and not yet taken by the server, oldest first; shown over [marks]. */
+    private val pending = ArrayList<PendingInboxMark>()
+
+    /**
+     * "All" marks the server took and the next pull has not confirmed yet:
+     * still shown over [marks], but never written into it (nor the cache),
+     * because this device's guess of what "all" reached is only an estimate
+     * (the server's real marks come with the pull).
+     */
+    private val settled = ArrayList<PendingInboxMark>()
+
+    /** One sender of [pending] at a time, so changes reach the server in the order they were made. */
+    private val sending = Mutex()
     private var cursor = 0L
     private var job: Job? = null
     private var restored = false
@@ -148,6 +217,9 @@ public class Inbox(
 
     /** The cache was from an older [InboxSnapshot.SCHEMA]: the first page from cursor 0 replaces it. */
     private var resync = false
+
+    /** A reset or resync cleared [rules]: the ones older than the feed's horizon only come back from the server. */
+    private var rulesCleared = false
 
     /**
      * Loads the cached state, if any (once; [start] and [refresh] call it).
@@ -161,6 +233,9 @@ public class Inbox(
             val snap = runCatching { c.load() }.getOrNull() ?: return
             snap.notifications.forEach { byId[it.id] = it }
             snap.ended.forEach { (id, status) -> ended.putIfAbsent(id, status) }
+            snap.marks.forEach { marks.putIfAbsent(it.notificationId, it) }
+            snap.rules.forEach { rules.putIfAbsent(it.id, it) }
+            if (pending.isEmpty()) pending.addAll(snap.pendingMarks)
             // An older cache: shown now, but the next pull starts over (cursor 0)
             // and replaces it, as a first sync on a new install would.
             if (snap.schema < InboxSnapshot.SCHEMA) resync = true
@@ -185,6 +260,7 @@ public class Inbox(
     /** Pulls what changed since the last sync and reloads the open questions. */
     public suspend fun refresh() {
         restore()
+        sendMarks()
         guard {
             pull()
             loadQuestions()
@@ -239,7 +315,11 @@ public class Inbox(
         }
     }
 
-    /** Marks notifications as read, here and on the server. */
+    /**
+     * Marks notifications as read, here and on the server: only when the
+     * person opened them (it is evidence, and the sender sees "read"). To
+     * tidy the inbox use [mark] and [markAll].
+     */
     public suspend fun markOpened(notificationIds: List<String>) {
         if (notificationIds.isEmpty()) return
         val now = java.time.Instant.now().toString()
@@ -274,9 +354,168 @@ public class Inbox(
         }
     }
 
+    /**
+     * Sets or clears the person's marks (seen, archived, pinned) on these
+     * notifications, on the server; the change comes back through the feed,
+     * on every device. Waiting items are never archived nor marked seen
+     * ([InboxMarksResult.waiting]). No evidence, no read receipt.
+     *
+     * It shows here at once. Offline it waits in a queue (kept with the
+     * cache) and goes with the next [refresh] or connection, in order; the
+     * result is then this inbox's estimate, with [InboxMarksResult.queued].
+     * A refusal of the server throws [NotificMeException] and the change is
+     * undone here.
+     */
+    public suspend fun mark(notificationIds: List<String>, change: InboxMarkChange): InboxMarksResult {
+        val ids = notificationIds.distinct()
+        if (ids.isEmpty()) return InboxMarksResult()
+        return submit(PendingInboxMark.of(ids, null, null, null, change))
+    }
+
+    /**
+     * Sets or clears the marks on everything this inbox already has ("mark
+     * all as seen", "archive all"), optionally only one service or type:
+     * up to the current cursor, so what arrives meanwhile stays. "Archive
+     * all" keeps pinned items; waiting items stay. Offline, as in [mark].
+     */
+    public suspend fun markAll(change: InboxMarkChange, source: String? = null, type: String? = null): InboxMarksResult {
+        val until = lock.withLock { cursor }
+        if (until <= 0) return InboxMarksResult()
+        return submit(PendingInboxMark.of(emptyList(), until, source, type, change))
+    }
+
+    private suspend fun submit(p: PendingInboxMark): InboxMarksResult {
+        val estimate = lock.withLock {
+            val r = MarkOverlay.apply(p, HashMap(mutable.value.marks), overlayState(), workspaceId)
+            pending += p
+            publish()
+            r
+        }
+        val sent = sendMarks()
+        sent.failed[p.id]?.let { throw it }
+        val r = sent.done[p.id] ?: return estimate.copy(queued = true)
+        guard { pull() }
+        return r
+    }
+
+    private class Sent(val done: Map<String, InboxMarksResult>, val failed: Map<String, NotificMeException>)
+
+    /**
+     * Sends the queued marks in order. Offline (or the server failing) it
+     * stops and keeps them for later; a refusal (4xx) drops that change.
+     */
+    private suspend fun sendMarks(): Sent = sending.withLock {
+        val done = HashMap<String, InboxMarksResult>()
+        val failed = HashMap<String, NotificMeException>()
+        while (true) {
+            val p = lock.withLock { pending.firstOrNull() } ?: break
+            val r = try {
+                sendMark(p)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: NotificMeException) {
+                if (laterAgain(e)) break
+                lock.withLock {
+                    pending.remove(p)
+                    publish()
+                }
+                failed[p.id] = e
+                continue
+            }
+            lock.withLock {
+                pending.remove(p)
+                // Kept as the server will send it back, so nothing blinks before the next pull.
+                // "All" stays only an overlay: what the server really reached comes with the pull.
+                if (p.ids.isEmpty() && p.untilCursor != null) settled += p
+                else MarkOverlay.apply(p, marks, overlayState(), workspaceId)
+                publish()
+            }
+            done[p.id] = r
+        }
+        Sent(done, failed)
+    }
+
+    private suspend fun sendMark(p: PendingInboxMark): InboxMarksResult {
+        var total = InboxMarksResult()
+        val until = p.untilCursor
+        if (p.ids.isEmpty() && until != null) {
+            var rounds = 0
+            var after: String? = null
+            do {
+                val r = client.markInboxAll(until, p.change, workspaceId, p.source, p.type, after)
+                // With next_after each round goes on from where the last one stopped and
+                // the counts add up; without it (an older server) the same items come back,
+                // so waiting, unchanged and kept_pinned keep the largest count.
+                total = if (rounds == 0 || after != null || r.nextAfter != null) total + r else total.repeated(r)
+                after = r.nextAfter ?: after
+            } while (!r.complete && ++rounds < MAX_PAGES)
+        } else {
+            for (chunk in p.ids.chunked(MAX_MARK_IDS)) total = total + client.markInbox(chunk, p.change)
+        }
+        return total
+    }
+
+    /** Worth trying again later: no network, a timeout, the server failing or busy, the session to renew. */
+    private fun laterAgain(e: NotificMeException): Boolean =
+        e.code == ErrorCodes.NETWORK_ERROR || e.code == ErrorCodes.TIMEOUT || e.code == ErrorCodes.UNAUTHORIZED ||
+            e.code == ErrorCodes.RATE_LIMITED || (e is NotificMeApiException && e.status >= 500)
+
+    /** What [MarkOverlay] needs to tell waiting items (call with [lock] held). */
+    private fun overlayState(): InboxState = InboxState(
+        notifications = byId.values.toList(),
+        questions = mutable.value.questions,
+        ended = HashMap(ended),
+    )
+
+    /**
+     * Creates or adjusts the person's rule for a service (and optionally a
+     * type), the same on every device; see [NotificClient.saveInboxRule].
+     * Online only: it throws [NotificMeException] offline.
+     */
+    public suspend fun saveRule(
+        workspaceId: String,
+        source: String,
+        type: String? = null,
+        group: Boolean? = null,
+        mute: Boolean? = null,
+        autoArchiveAfter: Int? = null,
+        clearAutoArchive: Boolean = false,
+    ): InboxRule {
+        val r = client.saveInboxRule(workspaceId, source, type, group, mute, autoArchiveAfter, clearAutoArchive)
+        lock.withLock {
+            rules[r.id] = r
+            publish()
+        }
+        return r
+    }
+
+    /** Deletes a rule (the service goes back to the defaults). Online only. */
+    public suspend fun deleteRule(id: String) {
+        try {
+            client.deleteInboxRule(id)
+        } catch (e: NotificMeApiException) {
+            if (e.status != 404) throw e
+        }
+        lock.withLock {
+            rules.remove(id)
+            publish()
+        }
+    }
+
+    /** Loads every rule of the person again (after a full resync). Own session only. */
+    public suspend fun reloadRules() {
+        val list = client.inboxRules(workspaceId)
+        lock.withLock {
+            rules.clear()
+            list.forEach { rules[it.id] = it }
+            publish()
+        }
+    }
+
     private suspend fun run() {
         restore()
         mutable.update { it.copy(loading = it.notifications.isEmpty() && it.questions.isEmpty(), connection = Connection.Connecting) }
+        sendMarks()
         val ok = guard {
             pull()
             loadQuestions()
@@ -291,8 +530,12 @@ public class Inbox(
                     is RealtimeEvent.Ready -> {
                         lock.withLock { if (event.cursor > cursor) cursor = event.cursor }
                         mutable.update { it.copy(connection = Connection.Live, error = null) }
+                        // Back online: what was marked offline goes now.
+                        if (lock.withLock { pending.isNotEmpty() } && sendMarks().done.isNotEmpty()) guard { pull() }
                         guard { loadQuestions() }
                     }
+                    // Marks or rules changed elsewhere (another device, a rule): read what changed.
+                    is RealtimeEvent.InboxChanged -> guard { pull() }
                     is RealtimeEvent.Delivered -> guard {
                         pull()
                         if (event.delivery.questionSetId != null) loadQuestions()
@@ -310,12 +553,32 @@ public class Inbox(
 
     /** Reads the feed from the current cursor until it is caught up. */
     private suspend fun pull() {
+        // The "all" marks the server had taken before this pull began are in what it reads.
+        val confirmed = lock.withLock { settled.toList() }
         var pages = 0
         do {
             val page = client.sync(lock.withLock { cursor })
             apply(page)
             // A reset already cleared the list and moved the cursor to 0: read again from there.
         } while ((page.hasMore || page.reset) && ++pages < MAX_PAGES)
+        if (confirmed.isNotEmpty()) {
+            lock.withLock {
+                settled.removeAll(confirmed.toSet())
+                publish()
+            }
+        }
+        // Rules older than the feed's horizon left with the reset: load them all again,
+        // or a muted service would ring again until the next start.
+        if (lock.withLock { rulesCleared.also { rulesCleared = false } }) {
+            try {
+                reloadRules()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: NotificMeException) {
+                // A delegated session has no personal rules; offline, the next pull tries again.
+                if (laterAgain(e)) lock.withLock { rulesCleared = true }
+            }
+        }
     }
 
     private suspend fun apply(page: SyncPage) {
@@ -325,7 +588,11 @@ public class Inbox(
         lock.withLock {
             if (page.reset || resync) {
                 byId.clear()
+                marks.clear()
+                rules.clear()
+                settled.clear()
                 resync = false
+                rulesCleared = true
             }
             // The server no longer knows this cursor: start over from 0 (a cursor only
             // ever comes from next_cursor or "ready", never from a live delivery's seq).
@@ -354,6 +621,24 @@ public class Inbox(
                         change?.decision?.takeIf { change.status == QuestionSetStatus.Open }?.let { votes[id] = it }
                     }
                     SyncEntity.AnswerSet -> questionsChanged = true
+                    SyncEntity.InboxMark -> {
+                        val data = c.data
+                        if (c.op == SyncOp.Delete || data == null) {
+                            marks.remove(c.id)
+                        } else {
+                            runCatching { Wire.json.decodeFromJsonElement(InboxMark.serializer(), data) }
+                                .onSuccess { marks[it.notificationId.ifEmpty { c.id }] = it }
+                        }
+                    }
+                    SyncEntity.InboxRule -> {
+                        val data = c.data
+                        if (c.op == SyncOp.Delete || data == null) {
+                            rules.remove(c.id)
+                        } else {
+                            runCatching { Wire.json.decodeFromJsonElement(InboxRule.serializer(), data) }
+                                .onSuccess { rules[it.id] = it }
+                        }
+                    }
                     else -> Unit
                 }
             }
@@ -424,8 +709,19 @@ public class Inbox(
         // Only what still has a notification here is worth keeping.
         val referenced = list.mapNotNullTo(HashSet()) { it.questionSetId }
         ended.keys.retainAll(referenced)
+        // Marks of notifications no longer here go too (a mark never comes before its notification).
+        marks.keys.retainAll(byId.keys)
         val endedNow = HashMap(ended)
-        mutable.update { it.copy(notifications = list, ended = endedNow) }
+        val marksNow = HashMap(marks)
+        // What was asked and the server did not take yet shows already (offline too).
+        if (pending.isNotEmpty() || settled.isNotEmpty()) {
+            val view = InboxState(notifications = list, questions = mutable.value.questions, ended = endedNow)
+            settled.forEach { MarkOverlay.apply(it, marksNow, view, workspaceId) }
+            pending.forEach { MarkOverlay.apply(it, marksNow, view, workspaceId) }
+        }
+        val rulesNow = rules.values.toList()
+        val queued = pending.size
+        mutable.update { it.copy(notifications = list, ended = endedNow, marks = marksNow, rules = rulesNow, queuedMarks = queued) }
         scheduleSave()
     }
 
@@ -453,6 +749,9 @@ public class Inbox(
                 notifications = byId.values.toList(),
                 questions = state.value.questions,
                 ended = HashMap(ended),
+                marks = marks.values.toList(),
+                rules = rules.values.toList(),
+                pendingMarks = pending.toList(),
                 // Still owed a full sync (offline since the update): saved as old, so it stays owed.
                 schema = if (resync) 0 else InboxSnapshot.SCHEMA,
             )
@@ -471,6 +770,29 @@ public class Inbox(
         mutable.update { it.copy(error = e) }
         false
     }
+
+    private operator fun InboxMarksResult.plus(o: InboxMarksResult): InboxMarksResult = InboxMarksResult(
+        applied = applied + o.applied,
+        unchanged = unchanged + o.unchanged,
+        waiting = waiting + o.waiting,
+        waitingByReason = (waitingByReason.keys + o.waitingByReason.keys).associateWith { (waitingByReason[it] ?: 0) + (o.waitingByReason[it] ?: 0) },
+        keptPinned = keptPinned + o.keptPinned,
+        notFound = notFound + o.notFound,
+        complete = o.complete,
+        queued = queued || o.queued,
+    )
+
+    /** [o] counted the same items again: only the applied and the not found add up. */
+    private fun InboxMarksResult.repeated(o: InboxMarksResult): InboxMarksResult = InboxMarksResult(
+        applied = applied + o.applied,
+        unchanged = maxOf(unchanged, o.unchanged),
+        waiting = maxOf(waiting, o.waiting),
+        waitingByReason = (waitingByReason.keys + o.waitingByReason.keys).associateWith { maxOf(waitingByReason[it] ?: 0, o.waitingByReason[it] ?: 0) },
+        keptPinned = maxOf(keptPinned, o.keptPinned),
+        notFound = notFound + o.notFound,
+        complete = o.complete,
+        queued = queued || o.queued,
+    )
 
     private companion object {
         const val MAX_PAGES = 50

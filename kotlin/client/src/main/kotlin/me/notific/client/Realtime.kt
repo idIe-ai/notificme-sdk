@@ -37,6 +37,12 @@ public sealed interface RealtimeEvent {
     /** A new delivery (or an update of a live card). Already acknowledged as delivered. */
     public data class Delivered(val delivery: Delivery) : RealtimeEvent
 
+    /**
+     * The person's inbox marks or rules changed on another device (or by a
+     * rule): sync from the cursor you have (docs/27).
+     */
+    public data object InboxChanged : RealtimeEvent
+
     /** The gateway rejected a message. */
     public data class ServerError(val code: String, val message: String) : RealtimeEvent
 
@@ -150,6 +156,7 @@ internal class Realtime(private val client: NotificClient) {
                     val d = o["delivery"] as? JsonObject ?: return null
                     RealtimeEvent.Delivered(Wire.json.decodeFromJsonElement(Delivery.serializer(), d))
                 }
+                "inbox_changed" -> RealtimeEvent.InboxChanged
                 "error" -> RealtimeEvent.ServerError(o.str("code").orEmpty(), o.str("message").orEmpty())
                 else -> null
             }

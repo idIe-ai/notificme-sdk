@@ -200,7 +200,12 @@ public class NotificClient(
         call(HttpMethod.Post, "/v0/reactions", JsonElement.serializer(), body = Wire.json.encodeToJsonElement(ReactionsRequest.serializer(), body))
     }
 
-    /** Marks notifications as read. */
+    /**
+     * Marks notifications as read: only when the person opened the card. It
+     * is evidence ("opened") and the sender sees "read". To tidy the inbox
+     * ("mark all as seen", archive) use [markInbox] or [markInboxAll], which
+     * create no evidence (docs/27, D1).
+     */
     public suspend fun markOpened(notificationIds: List<String>): Unit = react(now(ReactionKind.Opened, notificationIds))
 
     /** The person dismissed these notifications. */

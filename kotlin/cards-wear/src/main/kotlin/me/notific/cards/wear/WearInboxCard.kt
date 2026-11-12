@@ -12,6 +12,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +39,8 @@ import me.notific.client.Severity
  * from and when, a title of up to two lines and a short summary. Unread rows
  * have a brighter title; [badge] marks decisions ("Decision", "Answer on phone").
  * [avatar], when given, shows who sent it (a small photo or icon) in place of the dot.
+ * [onTextOverflow], when given, hears whether the title or the summary was cut
+ * on screen (measured, not counted), so the app knows if the row showed it all.
  */
 @Composable
 public fun WearInboxCard(
@@ -49,7 +56,14 @@ public fun WearInboxCard(
     badgeColor: Color = MaterialTheme.colorScheme.primary,
     transformation: SurfaceTransformation? = null,
     avatar: (@Composable () -> Unit)? = null,
+    onTextOverflow: ((Boolean) -> Unit)? = null,
 ) {
+    var cutTitle by remember { mutableStateOf(false) }
+    var cutSubtitle by remember { mutableStateOf(false) }
+    if (onTextOverflow != null) {
+        val cut = cutTitle || (subtitle.isNotBlank() && cutSubtitle)
+        LaunchedEffect(cut) { onTextOverflow(cut) }
+    }
     Card(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
@@ -85,6 +99,7 @@ public fun WearInboxCard(
             color = if (unread) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.86f),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
+            onTextLayout = { cutTitle = it.hasVisualOverflow },
         )
         if (subtitle.isNotBlank()) {
             Text(
@@ -93,6 +108,7 @@ public fun WearInboxCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                onTextLayout = { cutSubtitle = it.hasVisualOverflow },
             )
         }
         if (badge != null) {
@@ -116,7 +132,11 @@ public fun WearInboxCard(
     }
 }
 
-/** [WearInboxCard] for a notification. [origin] defaults to its source (`dokploy`). */
+/**
+ * [WearInboxCard] for a notification. [origin] defaults to its source
+ * (`dokploy`); [unread] to not opened (pass `InboxState.isUnread` to count
+ * "seen" too). [onTextOverflow]: see [WearInboxCard].
+ */
 @Composable
 public fun WearNotificationCard(
     notification: Notification,
@@ -127,6 +147,8 @@ public fun WearNotificationCard(
     badgeColor: Color = MaterialTheme.colorScheme.primary,
     transformation: SurfaceTransformation? = null,
     avatar: (@Composable () -> Unit)? = null,
+    unread: Boolean = notification.unread,
+    onTextOverflow: ((Boolean) -> Unit)? = null,
 ) {
     WearInboxCard(
         avatar = avatar,
@@ -137,10 +159,11 @@ public fun WearNotificationCard(
         origin = origin,
         time = shortAgeText(notification.createdAt),
         accent = WearSeverity.color(notification.severity),
-        unread = notification.unread,
+        unread = unread,
         badge = badge,
         badgeColor = badgeColor,
         transformation = transformation,
+        onTextOverflow = onTextOverflow,
     )
 }
 
