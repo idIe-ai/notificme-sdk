@@ -92,4 +92,17 @@ public object ErrorCodes {
 
     /** An authority level left out of the ladder still has people (409, details `key`, `name`, `members`). */
     public const val AUTHORITY_LEVEL_IN_USE: String = "authority_level_in_use"
+
+    /**
+     * Client side: a magic link or a handoff points to a cell (server) that is
+     * not in `GET /v0/auth/cells` of the entry server, or whose URL there is
+     * not `https://`. Nothing was called; ask the person for a new link.
+     */
+    public const val UNKNOWN_CELL: String = "unknown_cell"
+
+    /** The one-time pass of a handoff expired, was used or is wrong (401 at the home cell). */
+    public const val INVALID_HANDOFF: String = "invalid_handoff"
+
+    /** The @handle could not be confirmed with the global registry now (503); try again in a few minutes. */
+    public const val HANDLE_REGISTRY_UNAVAILABLE: String = "handle_registry_unavailable"
 }

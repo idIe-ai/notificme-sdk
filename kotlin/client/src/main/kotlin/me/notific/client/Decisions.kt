@@ -57,6 +57,13 @@ public data class Vote(
     @SerialName("authority_level") val authorityLevel: String? = null,
     /** Name of that authority level (`Manager`). */
     @SerialName("authority_level_name") val authorityLevelName: String? = null,
+    /**
+     * The voter's account was deleted (soft delete): [displayName] comes as
+     * "Deleted account", always in English (the same view goes to every
+     * device's sync), with no [handle] and no photo. Show the label in the
+     * app's language. The vote and the signed reply do not change.
+     */
+    @SerialName("account_deleted") val accountDeleted: Boolean = false,
 ) {
     /** Name to show: the display name, else the @handle. */
     public val name: String get() = displayName.ifBlank { handle?.let { "@$it" }.orEmpty() }

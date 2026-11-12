@@ -51,8 +51,16 @@ auth.start("ana@acme.com")
 when (val r = auth.verify("ana@acme.com", code, NotificAndroid.device(context))) {
     is SignInResult.SignedIn -> tokens.set(r.session)
     is SignInResult.SignupRequired -> auth.signUp(r.signupToken, r.suggestedHandle, "Ana")
+    // Only from a server with the global identity on: the account lives on another cell.
+    is SignInResult.Handoff -> {
+        val home = auth.completeHandoff(r, NotificAndroid.device(context))
+        // Keep the person on home.baseUrl from now on (a client built with it).
+        (home.result as? SignInResult.SignedIn)?.let { tokens.set(it.session) }
+    }
 }
 ```
+
+The cell's URL comes only from `GET /v0/auth/cells` of the server you asked, and only when it is `https://` (a debug or QA build may set `Config.allowLoopbackHttpCells` to also follow lab cells at `http://127.0.0.1`, `http://localhost` or `http://10.0.2.2`; never in a store build); a magic link with `c=<cell_id>` goes through `auth.magicLinkAt(cellId, token)`. Servers send neither while the global identity is off (today's default). Service tokens (`nm_svc_`) stay bound to the URL you configure.
 
 Draw cards with your own components, or with the Compose renderer in [`cards/`](cards/):
 

@@ -130,6 +130,12 @@ class SampleViewModel(app: Application) : AndroidViewModel(app) {
         when (val r = authClient().auth.verify(step.email, code.trim(), NotificAndroid.device(getApplication()), locale())) {
             is SignInResult.SignedIn -> signedIn(r.session)
             is SignInResult.SignupRequired -> mutable.update { it.copy(login = step.copy(signup = r)) }
+            // The account lives on another cell (only with the global identity on). The sample
+            // keeps a single server, so it does not follow it; the official app does
+            // (Auth.completeHandoff, then the account on CellSignIn.baseUrl).
+            is SignInResult.Handoff -> throw me.notific.client.NotificMeException(
+                me.notific.client.ErrorCodes.UNKNOWN_CELL, "This account lives on another notific.me server",
+            )
         }
     }
 

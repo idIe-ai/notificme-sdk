@@ -93,6 +93,12 @@ public data class QuestionSet(
     @SerialName("require_face") val requireFace: Boolean = false,
     /** The signed reply, once answered. */
     val reply: Reply? = null,
+    /**
+     * Who answered ([Reply.answeredBy]) is a deleted account (soft delete).
+     * The signed reply keeps their identity untouched, so it still verifies;
+     * the screen shows "Deleted account" in its place.
+     */
+    @SerialName("answered_by_deleted") val answeredByDeleted: Boolean = false,
     /** Rebuilt from the signed archive (the decision left the hot database). */
     val archived: Boolean = false,
     /**

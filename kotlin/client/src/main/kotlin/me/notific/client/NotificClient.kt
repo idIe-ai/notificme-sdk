@@ -72,6 +72,14 @@ public class NotificClient(
         val platform: String? = null,
         /** Your own [HttpClient] (tests, proxies). It must have the [WebSockets] plugin for [realtime]. */
         val httpClient: HttpClient? = null,
+        /**
+         * Accept a cell from `GET /v0/auth/cells` at `http://127.0.0.1`,
+         * `http://localhost` or `http://10.0.2.2` (handoff and links with
+         * `c=`), to test sign-in between cells against lab cells. Only for
+         * debug and QA builds; the default (and every store build) accepts
+         * only `https://` cells.
+         */
+        val allowLoopbackHttpCells: Boolean = false,
     )
 
     internal val tokens: TokenProvider? = tokens
@@ -437,6 +445,12 @@ public class Auth internal constructor(private val client: NotificClient) {
         body = obj("email" to email, "locale" to locale), auth = false,
     )
 
+    /**
+     * Exchanges the code for a session. Besides [SignInResult.SignedIn] and
+     * [SignInResult.SignupRequired], a server with the global identity on may
+     * answer [SignInResult.Handoff] (the account lives on another cell):
+     * finish it with [completeHandoff].
+     */
     public suspend fun verify(email: String, code: String, device: DeviceInfo? = null, locale: String? = null): SignInResult =
         signIn("/v0/auth/verify", obj("email" to email, "code" to code, "locale" to locale, "device" to device?.let(::encodeDevice)))
 
@@ -501,14 +515,86 @@ public class Auth internal constructor(private val client: NotificClient) {
         client.call(HttpMethod.Post, "/v0/auth/logout", JsonElement.serializer())
     }
 
+    // ---------------------------------------------------- login between cells
+
+    /**
+     * `GET /v0/auth/cells`: the cells this server routes sign-ins to. `null`
+     * when it answers 404, which means a single cell (the global identity is
+     * off, today's case everywhere).
+     */
+    public suspend fun cells(): CellDirectory? = try {
+        client.call(HttpMethod.Get, "/v0/auth/cells", CellDirectory.serializer(), auth = false)
+    } catch (e: NotificMeApiException) {
+        if (e.status == 404) null else throw e
+    }
+
+    /**
+     * `POST /v0/auth/handoff`: exchanges the one-time pass of a
+     * [SignInResult.Handoff] for a session. Call it on a client of the HOME
+     * cell (see [completeHandoff], which does the whole thing). Answers
+     * [SignInResult.SignedIn] or [SignInResult.SignupRequired];
+     * `invalid_handoff` (401) when the pass expired or was used.
+     */
+    public suspend fun handoff(token: String, device: DeviceInfo? = null, locale: String? = null): SignInResult {
+        val r = signIn("/v0/auth/handoff", obj("token" to token, "locale" to locale, "device" to device?.let(::encodeDevice)))
+        if (r is SignInResult.Handoff) throw NotificMeException("invalid_response", "A handoff cannot lead to another handoff")
+        return r
+    }
+
+    /**
+     * Finishes a [SignInResult.Handoff] that [verify] returned: resolves the
+     * home cell by [cells] of THIS server (only a listed `https://` URL), then
+     * exchanges the pass there. Keep the account on [CellSignIn.baseUrl].
+     * `unknown_cell` when the cell is not in the list (nothing is called).
+     */
+    public suspend fun completeHandoff(handoff: SignInResult.Handoff, device: DeviceInfo? = null, locale: String? = null): CellSignIn {
+        val base = cellUrl(handoff.cellId, singleCellIsHere = false)
+        val result = at(base) { it.auth.handoff(handoff.token, device, locale) }
+        return CellSignIn(base, result)
+    }
+
+    /**
+     * A magic or invite link that carries `c=<cell_id>` ([cellId]): signs in
+     * at the cell that issued it, resolved by [cells] of THIS server. No
+     * [cellId], this server's own id, or a server with a single cell: the same
+     * as [magicLink] here. A cell not in the list: `unknown_cell`, nothing is
+     * called. A URL that comes with the link is never used.
+     */
+    public suspend fun magicLinkAt(cellId: String?, token: String, device: DeviceInfo? = null, locale: String? = null): CellSignIn {
+        val base = if (cellId.isNullOrBlank()) client.baseUrl else cellUrl(cellId, singleCellIsHere = true)
+        val result = at(base) { it.auth.magicLink(token, device, locale) }
+        return CellSignIn(base, result)
+    }
+
+    /**
+     * Base URL of [cellId] from this server's list. [singleCellIsHere]: a
+     * 404 list (single cell) means this server (links); otherwise it is an
+     * unknown cell (a handoff always comes with the list on).
+     */
+    private suspend fun cellUrl(cellId: String, singleCellIsHere: Boolean): String {
+        if (!CellDirectory.isValidCellId(cellId)) throw unknownCell()
+        val dir = cells() ?: if (singleCellIsHere) return client.baseUrl else throw unknownCell()
+        if (cellId == dir.self) return client.baseUrl
+        return dir.urlOf(cellId, client.config.allowLoopbackHttpCells) ?: throw unknownCell()
+    }
+
+    private fun unknownCell() = NotificMeException(ErrorCodes.UNKNOWN_CELL, "The link or sign-in points to a server this one does not list")
+
+    /** Runs [block] with a client of [base] (this client itself when it is the same server). */
+    private suspend fun <T> at(base: String, block: suspend (NotificClient) -> T): T {
+        if (base == client.baseUrl) return block(client)
+        return NotificClient(null, client.config.copy(baseUrl = base)).use { block(it) }
+    }
+
     private suspend fun signIn(path: String, body: JsonElement): SignInResult {
         val raw = client.call(HttpMethod.Post, path, JsonElement.serializer(), body = body, auth = false)
         val o = raw as? JsonObject ?: throw NotificMeException("invalid_response", "Expected an object")
         return try {
-            if (o["status"]?.jsonPrimitive?.contentOrNull == "signup_required") {
-                Wire.json.decodeFromJsonElement(SignInResult.SignupRequired.serializer(), o)
-            } else {
-                SignInResult.SignedIn(Wire.json.decodeFromJsonElement(Session.serializer(), o))
+            when (o["status"]?.jsonPrimitive?.contentOrNull) {
+                "signup_required" -> Wire.json.decodeFromJsonElement(SignInResult.SignupRequired.serializer(), o)
+                // Only with the global identity on (docs/26): the account lives on another cell.
+                "handoff" -> Wire.json.decodeFromJsonElement(SignInResult.Handoff.serializer(), o["handoff"] as JsonObject)
+                else -> SignInResult.SignedIn(Wire.json.decodeFromJsonElement(Session.serializer(), o))
             }
         } catch (e: Exception) {
             throw NotificMeException("invalid_response", "Unexpected sign-in response: ${e.message}", e)

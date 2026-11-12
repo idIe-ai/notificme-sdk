@@ -108,6 +108,41 @@ class WireTest {
     }
 
     @Test
+    fun deletedAccountsAreMarked() {
+        // Sent: a recipient and an answer from a deleted account, with the server's label and no @handle or photo.
+        val d = Wire.json.decodeFromString(
+            SentDetail.serializer(),
+            """{"id":"s1","recipients":[{"person":{"id":"u9","handle":"","display_name":"Deleted account","avatar_url":"","account_deleted":true}},{"person":{"id":"u1","handle":"ana","display_name":"Ana"}}],
+               "answers":[{"person":{"id":"u9","handle":"","display_name":"Deleted account","account_deleted":true},"answered_at":"2026-11-11T12:00:00Z","answers":[]}]}""",
+        )
+        assertTrue(d.recipients[0].person!!.accountDeleted)
+        assertEquals(false, d.recipients[1].person!!.accountDeleted)
+        assertTrue(d.answers[0].person!!.accountDeleted)
+        // The contact and member views carry it into their Person.
+        assertTrue(Wire.json.decodeFromString(Contact.serializer(), """{"id":"u9","account_deleted":true}""").person.accountDeleted)
+        assertTrue(Wire.json.decodeFromString(OrgMember.serializer(), """{"id":"u9","account_deleted":true}""").person.accountDeleted)
+        assertEquals(false, Wire.json.decodeFromString(Contact.serializer(), """{"id":"u1","handle":"ana"}""").person.accountDeleted)
+
+        // Votes (always "Deleted account" in English, the same view goes to the sync).
+        val view = Wire.json.decodeFromString(
+            DecisionView.serializer(),
+            """{"rule":"quorum","required":2,"votes":[{"user_id":"u9","handle":null,"display_name":"Deleted account","approve":true,"at":"2026-11-11T12:00:00Z","account_deleted":true}],
+               "decided_by":{"user_id":"u1","handle":"ana","display_name":"Ana","approve":true}}""",
+        )
+        assertTrue(view.votes.single().accountDeleted)
+        assertEquals("Deleted account", view.votes.single().mention)
+        assertEquals(false, view.decidedBy!!.accountDeleted)
+
+        // The question set says who answered is gone, but the signed reply keeps the identity untouched.
+        val raw = """{"question_set_id":"q","status":"answered","answers":[],"answered_by":{"identity":"rafa@acme.com","level_used":1,"auth_method":"unlock"},"signature":{"alg":"Ed25519","value":"x"}}"""
+        val qs = Wire.json.decodeFromString(QuestionSet.serializer(), """{"id":"q","status":"answered","answered_by_deleted":true,"reply":$raw}""")
+        assertTrue(qs.answeredByDeleted)
+        assertEquals("rafa@acme.com", qs.reply!!.answeredBy!!.identity)
+        assertEquals(Wire.json.decodeFromString(Reply.serializer(), raw), qs.reply)
+        assertEquals(false, Wire.json.decodeFromString(QuestionSet.serializer(), """{"id":"q"}""").answeredByDeleted)
+    }
+
+    @Test
     fun signedReplyCarriesTheSignature() {
         val reply = Wire.json.decodeFromString(
             Reply.serializer(),

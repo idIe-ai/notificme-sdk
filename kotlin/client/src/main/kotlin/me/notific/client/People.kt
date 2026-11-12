@@ -219,6 +219,14 @@ public data class Person(
     @SerialName("display_name") val displayName: String = "",
     /** Path on the API; full URL with [NotificClient.urlOf]. */
     @SerialName("avatar_url") val avatarUrl: String? = null,
+    /**
+     * A deleted account (soft delete): the server sends [displayName] as
+     * "Deleted account" (English when the request has no `Accept-Language`),
+     * with no [handle] and no photo. Show the label in the app's language
+     * in place of [name], and no @handle. What they answered and signed
+     * does not change.
+     */
+    @SerialName("account_deleted") val accountDeleted: Boolean = false,
 ) {
     public val name: String get() = displayName.ifBlank { handle }
 }
@@ -232,8 +240,10 @@ public data class Contact(
     val since: String = "",
     /** `request` (accepted a request) or `pin` (added with the @handle PIN). */
     val via: String = "",
+    /** A deleted account, as in [Person.accountDeleted]. */
+    @SerialName("account_deleted") val accountDeleted: Boolean = false,
 ) {
-    public val person: Person get() = Person(id, handle, displayName, avatarUrl)
+    public val person: Person get() = Person(id, handle, displayName, avatarUrl, accountDeleted)
 }
 
 @Serializable
@@ -256,8 +266,10 @@ public data class OrgMember(
     @SerialName("avatar_url") val avatarUrl: String? = null,
     /** `owner`, `admin`, `member` or `guest`. */
     val role: String = "",
+    /** A deleted account, as in [Person.accountDeleted]. */
+    @SerialName("account_deleted") val accountDeleted: Boolean = false,
 ) {
-    public val person: Person get() = Person(id, handle, displayName, avatarUrl)
+    public val person: Person get() = Person(id, handle, displayName, avatarUrl, accountDeleted)
 }
 
 /** An organization of the person and its members (its contacts). */

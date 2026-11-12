@@ -13,6 +13,12 @@ public data class User(
     /** Path on the API (`/v0/avatars/…`); empty when there is no photo. Full URL: [NotificClient.urlOf]. */
     @SerialName("avatar_url") val avatarUrl: String? = null,
     @SerialName("created_at") val createdAt: String = "",
+    /**
+     * `choose_new` when the person's @handle also exists on another server of
+     * notific.me and the older account keeps it: ask them to pick another
+     * (they may do it later; nothing changes until then). `null` otherwise.
+     */
+    @SerialName("handle_action") val handleAction: String? = null,
 )
 
 /** A signed-in session of the person (`nm_ses_…`). */
@@ -59,6 +65,26 @@ public sealed interface SignInResult {
         @SerialName("expires_at") val expiresAt: String = "",
         @SerialName("suggested_handle") val suggestedHandle: String = "",
     ) : SignInResult
+
+    /**
+     * The e-mail lives on another server of notific.me (its home cell
+     * [cellId]): the server you asked answered with a one-time pass instead
+     * of a session. Finish with [Auth.completeHandoff], which resolves the
+     * cell through [Auth.cells] of the server you asked (never from anything
+     * else) and exchanges [token] there for a normal session of that cell.
+     *
+     * The pass is single use and lasts 60 seconds. Servers only send it with
+     * the global identity turned on; until then [Auth.verify] never returns it.
+     */
+    @Serializable
+    public data class Handoff(
+        @SerialName("cell_id") val cellId: String,
+        val token: String,
+        @SerialName("expires_at") val expiresAt: String = "",
+    ) : SignInResult {
+        // The pass is a secret: never in logs or crash reports.
+        override fun toString(): String = "Handoff(cellId=$cellId, token=***, expiresAt=$expiresAt)"
+    }
 }
 
 @Serializable
@@ -73,6 +99,8 @@ public data class Workspace(
     val plan: String = "",
     /** Path of the logo on the API (`/v0/avatars/…`); empty when there is none. Full URL: [NotificClient.urlOf]. */
     @SerialName("logo_url") val logoUrl: String? = null,
+    /** `choose_new` (only for owners) when the organization's @handle also exists on another server; else `null`. */
+    @SerialName("handle_action") val handleAction: String? = null,
 ) {
     /** Owners and admins may change the workspace's rules (e.g. mute a source). */
     public val canManage: Boolean get() = role == "owner" || role == "admin"

@@ -19,15 +19,24 @@ public object NotificAndroid {
     /**
      * A [NotificClient] identified as your app (`User-Agent`) and as
      * `android` in reactions (`wearos` on a watch).
+     * [allowLoopbackHttpCells]: see [NotificClient.Config.allowLoopbackHttpCells]
+     * (debug and QA builds only; leave it false in a store build).
      */
     public fun client(
         context: Context,
         tokens: TokenProvider?,
         baseUrl: String = NotificClient.DEFAULT_BASE_URL,
+        allowLoopbackHttpCells: Boolean = false,
     ): NotificClient {
         val app = context.applicationContext
         val agent = "${app.packageName}/${versionName(app)} notificme-kotlin/${NotificClient.VERSION} (Android ${Build.VERSION.RELEASE})"
-        return NotificClient(tokens, NotificClient.Config(baseUrl = baseUrl, userAgent = agent, platform = if (isWatch(app)) PLATFORM_WEAR_OS else "android"))
+        return NotificClient(
+            tokens,
+            NotificClient.Config(
+                baseUrl = baseUrl, userAgent = agent, platform = if (isWatch(app)) PLATFORM_WEAR_OS else "android",
+                allowLoopbackHttpCells = allowLoopbackHttpCells,
+            ),
+        )
     }
 
     /**
