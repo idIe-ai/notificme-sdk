@@ -18,6 +18,7 @@
 
 ### Fixed
 
+- **`Inbox` recovers from a sync reset.** When `GET /v0/sync` answers `reset: true` (the server no longer knows the saved cursor), the inbox clears the list, moves the cursor back to 0 and reads everything again in the same refresh. Before, it kept sending the old cursor and wiped the list on every refresh. The cursor is now a global position (server ADR 0012) that only ever comes from `next_cursor` or the gateway's `ready`; the `seq` of a live delivery or of a push is informational and is never used as a cursor.
 - **`cards` tables fit the screen.** Columns of numbers (`150`, `1,090.00`, `US$ 3,842.60`, `-4%`) are right-aligned and never wrap; text columns wrap so the numbers fit. Only a table too wide even then scrolls sideways, and it fades at the edge that has more to show (a fourth column used to be cut off with no hint).
 
 ## 0.1.0

@@ -318,6 +318,31 @@ class ClientTest {
     }
 
     @Test
+    fun aDecisionEndedElsewhereLeavesTheCachedInboxWithoutTheNetwork() = runBlocking<Unit> {
+        val saved = CopyOnWriteArrayList<InboxSnapshot>()
+        val cache = object : InboxCache {
+            override suspend fun load() = InboxSnapshot(
+                cursor = 7,
+                notifications = listOf(Notification(id = "n1", createdAt = "2026-11-05T10:00:00Z", title = "Deploy?", questionSetId = "q1")),
+                questions = listOf(QuestionSet(id = "q1", title = "Deploy?")),
+                schema = InboxSnapshot.SCHEMA,
+            )
+            override suspend fun save(snapshot: InboxSnapshot) { saved += snapshot }
+            override suspend fun clear() = Unit
+        }
+        val c = client { json("{}", HttpStatusCode.NotFound) }
+        val inbox = Inbox(c, CoroutineScope(Dispatchers.Default), cache = cache)
+        // Not restored yet (a cold process woken by the phone): the cache must not bring it back later.
+        inbox.questionEnded("q1")
+        inbox.restore()
+        assertTrue(inbox.state.value.questions.isEmpty())
+        assertEquals(QuestionSetStatus.Answered, inbox.state.value.ended["q1"])
+        inbox.flush()
+        assertTrue(saved.last().questions.isEmpty())
+        assertTrue(requests.isEmpty())
+    }
+
+    @Test
     fun aCacheFromAnOlderSdkResyncsOnceFromTheStart() = runBlocking<Unit> {
         val saved = CopyOnWriteArrayList<InboxSnapshot>()
         // Saved before source_name existed: no schema in the file.
@@ -389,6 +414,37 @@ class ClientTest {
         val n = inbox.state.value.notifications.single()
         assertEquals(false, n.unread)
         assertEquals("read", n.deliveries.single().status)
+    }
+
+    @Test
+    fun inboxStartsOverWhenTheServerAsksForAReset() = runBlocking<Unit> {
+        val cursors = mutableListOf<String?>()
+        var resetSent = false
+        val c = client { req ->
+            when (req.url.encodedPath) {
+                "/v0/sync" -> {
+                    val cur = req.url.parameters["cursor"]
+                    cursors += cur
+                    when {
+                        cur == "0" && !resetSent -> json("""{"changes":[{"seq":1,"entity":"notification","id":"old","op":"upsert","workspace_id":"w1","data":{"id":"old","created_at":"2026-11-06T10:00:00Z","title":"Old"}}],"next_cursor":10,"has_more":false,"reset":false}""")
+                        // The server no longer knows cursor 10 (e.g. a restored database).
+                        cur == "10" -> { resetSent = true; json("""{"changes":[],"next_cursor":0,"has_more":false,"reset":true}""") }
+                        else -> json("""{"changes":[{"seq":12,"entity":"notification","id":"fresh","op":"upsert","workspace_id":"w1","data":{"id":"fresh","created_at":"2026-11-06T11:00:00Z","title":"Fresh"}}],"next_cursor":12,"has_more":false,"reset":false}""")
+                    }
+                }
+                "/v0/question-sets" -> json("""{"question_sets":[]}""")
+                else -> json("{}", HttpStatusCode.NotFound)
+            }
+        }
+        val inbox = Inbox(c, CoroutineScope(Dispatchers.Default))
+        inbox.refresh()
+        assertEquals(listOf("old"), inbox.state.value.notifications.map { it.id })
+        inbox.refresh()
+        // Cleared and read again from 0 in the same refresh, not stuck re-sending cursor 10.
+        assertEquals(listOf("fresh"), inbox.state.value.notifications.map { it.id })
+        assertEquals(listOf<String?>("0", "10", "0"), cursors)
+        inbox.refresh()
+        assertEquals("12", cursors.last())
     }
 
     @Test

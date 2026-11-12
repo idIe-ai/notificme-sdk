@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +25,7 @@ import androidx.wear.compose.material3.CardDefaults
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.RadioButton
+import androidx.wear.compose.material3.RadioButtonDefaults
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.TransformationSpec
@@ -44,6 +46,9 @@ import me.notific.client.QuestionType
  * hands the text back with [WearAnswerState.setSpoken]. Questions the watch
  * can't answer add no items.
  *
+ * [yesColor] and [noColor] tint "Yes" and "No" gently (a soft container, the
+ * icon in the color, a stronger container once picked); null keeps the theme.
+ *
  * ```
  * TransformingLazyColumn(state = listState) {
  *     for (q in answers.questions) wearQuestionItems(q, answers, spec, onSpeak = ::listen)
@@ -57,6 +62,8 @@ public fun TransformingLazyColumnScope.wearQuestionItems(
     enabled: Boolean = true,
     showText: Boolean = true,
     onSpeak: ((Question) -> Unit)? = null,
+    yesColor: Color? = null,
+    noColor: Color? = null,
 ) {
     val speech = onSpeak != null && state.dictation
     if (!question.answerableOnWatch(speech)) return
@@ -89,10 +96,12 @@ public fun TransformingLazyColumnScope.wearQuestionItems(
     when (question.type) {
         QuestionType.YesNo -> for (value in listOf(true, false)) {
             item(key = "q:${question.id}:$value") {
+                val tint = if (value) yesColor else noColor
                 RadioButton(
                     selected = state.yesNo(question.id) == value,
                     onSelect = { state.setYesNo(question.id, value) },
                     enabled = enabled,
+                    colors = tint?.let { tintedRadioColors(it) } ?: RadioButtonDefaults.radioButtonColors(),
                     transformation = SurfaceTransformation(transformationSpec),
                     icon = {
                         Icon(
@@ -181,6 +190,20 @@ public fun TransformingLazyColumnScope.wearQuestionItems(
         else -> Unit
     }
 }
+
+/** A soft container in [tint], the icon and the control in it; the text stays readable on the dark theme. */
+@Composable
+private fun tintedRadioColors(tint: Color) = RadioButtonDefaults.radioButtonColors(
+    selectedContainerColor = tint.copy(alpha = 0.34f),
+    selectedContentColor = MaterialTheme.colorScheme.onSurface,
+    selectedSecondaryContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    selectedIconColor = tint,
+    selectedControlColor = tint,
+    unselectedContainerColor = tint.copy(alpha = 0.14f),
+    unselectedContentColor = MaterialTheme.colorScheme.onSurface,
+    unselectedSecondaryContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    unselectedIconColor = tint,
+)
 
 /** The Material "mic" symbol (Apache 2.0), not in the core icon set. */
 public val MicIcon: ImageVector by lazy {

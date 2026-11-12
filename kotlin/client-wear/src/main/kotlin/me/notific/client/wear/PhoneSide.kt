@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.wear.remote.interactions.RemoteActivityHelper
+import com.google.android.gms.wearable.Asset
 import com.google.android.gms.wearable.CapabilityClient
+import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
@@ -40,6 +42,43 @@ public class PhoneLink(context: Context) {
     /** Forwards what arrived. Returns how many watches got it. */
     public suspend fun relay(items: List<RelayItem>): Int =
         if (items.isEmpty()) 0 else send(WatchLink.PATH_RELAY, WatchLink.encodeRelay(items), null)
+
+    /**
+     * A sender's image ([WatchLink.iconKey]) for every watch, as a Data Layer
+     * asset (a few KB; send it once, see [IconLedger]). Returns whether it
+     * was stored.
+     */
+    public suspend fun sendIcon(key: String, bytes: ByteArray): Boolean {
+        if (!WatchLink.isIconKey(key) || bytes.isEmpty()) return false
+        return try {
+            val request = PutDataMapRequest.create(WatchLink.iconPath(key)).apply {
+                dataMap.putAsset(WatchLink.ICON_ASSET, Asset.createFromBytes(bytes))
+                // A watch that lost its copy asks again: the same bytes must still count as a change.
+                dataMap.putLong("at", System.currentTimeMillis())
+            }.asPutDataRequest()
+            Wearable.getDataClient(app).putDataItem(request).await()
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /** Drops the data items of images no longer kept (they left the [IconLedger]). */
+    public suspend fun dropIcons(keys: Collection<String>) {
+        val client = Wearable.getDataClient(app)
+        for (key in keys) {
+            if (!WatchLink.isIconKey(key)) continue
+            try {
+                client.deleteDataItems(Uri.Builder().scheme("wear").path(WatchLink.iconPath(key)).build()).await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Stays until a later drop: only a few KB.
+            }
+        }
+    }
 
     /** Handled here ("got it", answered, read, being read, snoozed): the watches stop ringing for it. */
     public suspend fun handled(handled: Handled): Int = send(WatchLink.PATH_HANDLED, WatchLink.encodeHandled(handled), null)
@@ -109,6 +148,13 @@ public abstract class PhoneBridgeService : WearableListenerService() {
      */
     protected abstract suspend fun linkCodes(nodeId: String, linked: Set<String>): List<LinkCode>
 
+    /**
+     * The watch [nodeId] is missing these senders' images (items it only got
+     * by syncing, or a copy it dropped): send them with [PhoneLink.sendIcon].
+     * Runs off the main thread.
+     */
+    protected open suspend fun onIconRequest(nodeId: String, wants: List<IconWant>) {}
+
     /** The watch [nodeId] handled an item ("got it", answered, being read, snoozed): stop ringing for it here. */
     protected open fun onHandled(nodeId: String, handled: Handled) {}
 
@@ -121,6 +167,10 @@ public abstract class PhoneBridgeService : WearableListenerService() {
                 PhoneLink(this@PhoneBridgeService).sendLinkCodes(linkCodes(node, linked), node)
             }
             WatchLink.PATH_HANDLED -> WatchLink.decodeHandled(event.data ?: return)?.let { onHandled(node, it) }
+            WatchLink.PATH_ICON_REQUEST -> {
+                val wants = WatchLink.decodeIconRequest(event.data ?: return)
+                if (wants.isNotEmpty()) runBlocking { onIconRequest(node, wants) }
+            }
             // The watch asks to show one of its screens over everything: only on itself, only its own screens.
             WatchLink.PATH_OPEN_ON_WATCH -> {
                 val uri = event.data?.toString(Charsets.UTF_8) ?: return

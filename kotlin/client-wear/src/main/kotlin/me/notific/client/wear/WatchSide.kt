@@ -2,11 +2,15 @@ package me.notific.client.wear
 
 import android.content.Context
 import com.google.android.gms.wearable.CapabilityClient
+import com.google.android.gms.wearable.DataEvent
+import com.google.android.gms.wearable.DataEventBuffer
+import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
 
 /** The watch side: asks the phone app to link it, and tells it what was handled here. */
@@ -44,6 +48,14 @@ public class WatchLinkClient(context: Context) {
      */
     public suspend fun requestLink(linked: Collection<String> = emptyList()): Int =
         sendToPhones(WatchLink.PATH_LINK_REQUEST, WatchLink.encodeLinkRequest(linked))
+
+    /**
+     * Asks the phone for the senders' images this watch is missing (at most
+     * [WatchLink.ICON_REQUEST_MAX]); they arrive as Data Layer assets
+     * ([PhoneEventsService.onIcon]). Returns how many phones were asked.
+     */
+    public suspend fun requestIcons(wants: List<IconWant>): Int =
+        if (wants.isEmpty()) 0 else sendToPhones(WatchLink.PATH_ICON_REQUEST, WatchLink.encodeIconRequest(wants))
 
     /** Handled on the watch ("got it", answered, being read, snoozed): the phones stop ringing for it. */
     public suspend fun handled(handled: Handled): Int = sendToPhones(WatchLink.PATH_HANDLED, WatchLink.encodeHandled(handled))
@@ -100,6 +112,37 @@ public abstract class PhoneEventsService : WearableListenerService() {
 
     /** Handled on the phone: stop ringing for it here. */
     protected open fun onHandled(handled: Handled) {}
+
+    /**
+     * A sender's image from the phone ([WatchLink.iconKey], a few KB): keep it
+     * to show next to what that sender sends. Runs off the main thread.
+     * Declare `DATA_CHANGED` with the path prefix [WatchLink.PATH_ICON_PREFIX] to get it.
+     */
+    protected open fun onIcon(key: String, bytes: ByteArray) {}
+
+    override fun onDataChanged(events: DataEventBuffer) {
+        val client = Wearable.getDataClient(this)
+        for (event in events) {
+            if (event.type != DataEvent.TYPE_CHANGED) continue
+            val key = WatchLink.iconKeyOf(event.dataItem.uri.path ?: continue) ?: continue
+            val asset = runCatching { DataMapItem.fromDataItem(event.dataItem).dataMap.getAsset(WatchLink.ICON_ASSET) }.getOrNull() ?: continue
+            val bytes = runBlocking {
+                try {
+                    client.getFdForAsset(asset).await().inputStream.use { it.readBytes() }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+            } ?: continue
+            if (bytes.size <= MAX_ICON_BYTES) onIcon(key, bytes)
+        }
+    }
+
+    private companion object {
+        /** An image bigger than this is not a sender's icon. */
+        const val MAX_ICON_BYTES = 256 * 1024
+    }
 
     override fun onMessageReceived(event: MessageEvent) {
         val data = event.data ?: return

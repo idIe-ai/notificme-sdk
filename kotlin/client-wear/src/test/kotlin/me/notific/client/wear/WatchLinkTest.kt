@@ -70,4 +70,57 @@ class WatchLinkTest {
         assertNull(WatchLink.parseScreenUri("https://evil.example/alert/a/n"))
         assertNull(WatchLink.parseScreenUri("notificme-wear://alert/a"))
     }
+
+    @Test
+    fun `icon key is the sha1 of the url plus the shape, empty without one`() {
+        val url = "https://api.notific.me/v0/avatars/u1-abc.png"
+        val round = WatchLink.iconKey(url, round = true)
+        val square = WatchLink.iconKey(url, round = false)
+        // sha1("https://api.notific.me/v0/avatars/u1-abc.png"), the same name the phone's cache uses.
+        val sha1 = java.security.MessageDigest.getInstance("SHA-1").digest(url.toByteArray()).joinToString("") { "%02x".format(it) }
+        assertEquals("$sha1-round", round)
+        assertEquals("$sha1-square", square)
+        assertTrue(WatchLink.iconIsRound(round) && !WatchLink.iconIsRound(square))
+        assertEquals("", WatchLink.iconKey(null, true))
+        assertEquals("", WatchLink.iconKey(" ", false))
+        assertEquals(round, WatchLink.iconKeyOf(WatchLink.iconPath(round)))
+        assertEquals(null, WatchLink.iconKeyOf("/notificme/icon/../../etc"))
+        assertEquals(null, WatchLink.iconKeyOf("/notificme/relay"))
+    }
+
+    @Test
+    fun `the relay carries only the icon key, and an older payload reads without it`() {
+        val item = RelayItem(accountId = "a1", id = "n1", source = "claude_code", sourceName = "Claude", icon = WatchLink.iconKey("https://x/y.png", true))
+        assertEquals(listOf(item), WatchLink.decodeRelay(WatchLink.encodeRelay(listOf(item))))
+        val old = """{"version":1,"items":[{"account_id":"a1","id":"n1"}]}""".toByteArray()
+        assertEquals("", WatchLink.decodeRelay(old).single().icon)
+        assertEquals("", WatchLink.decodeRelay(old).single().sourceName)
+    }
+
+    @Test
+    fun `icon ledger sends each key once and drops the oldest past the limit`() {
+        val ledger = IconLedger(max = 3)
+        assertTrue(!ledger.has("a"))
+        assertEquals(emptyList(), ledger.mark("a"))
+        ledger.mark("b")
+        ledger.mark("c")
+        assertTrue(ledger.has("a"))
+        // Used again: it moves to the end, so "b" is the oldest now.
+        ledger.mark("a")
+        assertEquals(listOf("b"), ledger.mark("d"))
+        assertEquals(listOf("c", "a", "d"), ledger.sent)
+        // Restored from disk, it keeps only the newest.
+        assertEquals(listOf("c", "d"), IconLedger(listOf("a", "b", "c", "d"), max = 2).sent)
+    }
+
+    @Test
+    fun `icon request keeps only well-formed wants, at most the limit`() {
+        val good = (1..40).map { i -> "https://api.notific.me/v0/avatars/$i.png".let { IconWant(WatchLink.iconKey(it, i % 2 == 0), it, i % 2 == 0) } }
+        val forged = IconWant(WatchLink.iconKey("https://a/x.png", true), "https://evil/x.png", true)
+        val notHttp = "file:///etc/passwd".let { IconWant(WatchLink.iconKey(it, false), it, false) }
+        val decoded = WatchLink.decodeIconRequest(WatchLink.encodeIconRequest(listOf(forged, notHttp) + good))
+        // The encoder already cuts at the limit; the decoder drops what doesn't match its key.
+        assertEquals(good.take(WatchLink.ICON_REQUEST_MAX - 2), decoded)
+        assertTrue(WatchLink.decodeIconRequest("nonsense".toByteArray()).isEmpty())
+    }
 }

@@ -33,6 +33,7 @@ import me.notific.client.Severity
  * One row of a watch inbox: a colored dot for the severity, where it came
  * from and when, a title of up to two lines and a short summary. Unread rows
  * have a brighter title; [badge] marks decisions ("Decision", "Answer on phone").
+ * [avatar], when given, shows who sent it (a small photo or icon) in place of the dot.
  */
 @Composable
 public fun WearInboxCard(
@@ -47,6 +48,7 @@ public fun WearInboxCard(
     badge: String? = null,
     badgeColor: Color = MaterialTheme.colorScheme.primary,
     transformation: SurfaceTransformation? = null,
+    avatar: (@Composable () -> Unit)? = null,
 ) {
     Card(
         onClick = onClick,
@@ -58,7 +60,11 @@ public fun WearInboxCard(
         transformation = transformation,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
+            if (avatar != null) {
+                Box(Modifier.size(WearAvatarSize), contentAlignment = Alignment.Center) { avatar() }
+            } else {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
+            }
             Text(
                 origin,
                 style = MaterialTheme.typography.labelSmall,
@@ -120,8 +126,10 @@ public fun WearNotificationCard(
     badge: String? = null,
     badgeColor: Color = MaterialTheme.colorScheme.primary,
     transformation: SurfaceTransformation? = null,
+    avatar: (@Composable () -> Unit)? = null,
 ) {
     WearInboxCard(
+        avatar = avatar,
         title = wearMarkdown(notification.headline).text,
         subtitle = wearMarkdown(notification.subtitle).text,
         onClick = onClick,
@@ -149,9 +157,11 @@ public fun WearDecisionCard(
     origin: String = "",
     severity: Severity = Severity.High,
     transformation: SurfaceTransformation? = null,
+    avatar: (@Composable () -> Unit)? = null,
 ) {
     val title = questionSet.title.ifBlank { questionSet.questions.firstOrNull()?.text.orEmpty() }
     WearInboxCard(
+        avatar = avatar,
         title = wearMarkdown(title).text,
         subtitle = wearPlain(questionSet.context.orEmpty()),
         onClick = onClick,
@@ -178,3 +188,6 @@ public fun watchBlockerText(blocker: WatchBlocker): String = stringResource(
         WatchBlocker.Signature -> R.string.nmw_blocker_signature
     },
 )
+
+/** Side of the sender's image in a [WearInboxCard]. */
+public val WearAvatarSize: androidx.compose.ui.unit.Dp = 18.dp

@@ -224,6 +224,21 @@ public class Inbox(
         return accepted
     }
 
+    /**
+     * The decision ended on another device (answered on the phone or the
+     * web, told by a companion link): it leaves the open list now, before
+     * the next sync confirms it.
+     */
+    public suspend fun questionEnded(questionSetId: String, status: QuestionSetStatus = QuestionSetStatus.Answered) {
+        // Restored first, so a later restore does not bring it back from the cache.
+        restore()
+        lock.withLock {
+            ended[questionSetId] = status
+            mutable.update { s -> s.copy(questions = s.questions.filterNot { it.id == questionSetId }) }
+            publish()
+        }
+    }
+
     /** Marks notifications as read, here and on the server. */
     public suspend fun markOpened(notificationIds: List<String>) {
         if (notificationIds.isEmpty()) return
@@ -299,7 +314,8 @@ public class Inbox(
         do {
             val page = client.sync(lock.withLock { cursor })
             apply(page)
-        } while (page.hasMore && ++pages < MAX_PAGES)
+            // A reset already cleared the list and moved the cursor to 0: read again from there.
+        } while ((page.hasMore || page.reset) && ++pages < MAX_PAGES)
     }
 
     private suspend fun apply(page: SyncPage) {
@@ -311,6 +327,9 @@ public class Inbox(
                 byId.clear()
                 resync = false
             }
+            // The server no longer knows this cursor: start over from 0 (a cursor only
+            // ever comes from next_cursor or "ready", never from a live delivery's seq).
+            if (page.reset) cursor = 0
             for (c in page.changes) {
                 if (workspaceId != null && c.workspaceId.isNotEmpty() && c.workspaceId != workspaceId) continue
                 when (c.entity) {
