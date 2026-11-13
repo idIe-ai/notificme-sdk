@@ -4,7 +4,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -190,6 +193,11 @@ public class Inbox(
 ) {
     private val mutable = MutableStateFlow(InboxState())
     public val state: StateFlow<InboxState> = mutable.asStateFlow()
+
+    private val envelopeMutable = MutableSharedFlow<String>(extraBufferCapacity = 16)
+
+    /** Ids of envelopes that changed while the feed is live ([RealtimeEvent.EnvelopeChanged]). */
+    public val envelopeChanges: SharedFlow<String> = envelopeMutable.asSharedFlow()
 
     private val lock = Mutex()
     private val byId = LinkedHashMap<String, Notification>()
@@ -536,6 +544,7 @@ public class Inbox(
                     }
                     // Marks or rules changed elsewhere (another device, a rule): read what changed.
                     is RealtimeEvent.InboxChanged -> guard { pull() }
+                    is RealtimeEvent.EnvelopeChanged -> envelopeMutable.tryEmit(event.envelopeId)
                     is RealtimeEvent.Delivered -> guard {
                         pull()
                         if (event.delivery.questionSetId != null) loadQuestions()

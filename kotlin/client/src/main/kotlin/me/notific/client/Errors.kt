@@ -103,6 +103,32 @@ public object ErrorCodes {
     /** The one-time pass of a handoff expired, was used or is wrong (401 at the home cell). */
     public const val INVALID_HANDOFF: String = "invalid_handoff"
 
+    // Envelopes (server/docs/api-envelopes.md, "Erros").
+    public const val ENVELOPE_NOT_FOUND: String = "envelope_not_found"
+    public const val ENVELOPE_NOT_OPEN: String = "envelope_not_open"
+    public const val ENVELOPE_EXPIRED: String = "envelope_expired"
+    public const val ENVELOPE_ALREADY_SIGNED: String = "envelope_already_signed"
+
+    /** The document or the field layout shown is not the envelope's (409): open it again. */
+    public const val DOCUMENT_CHANGED: String = "document_changed"
+    public const val STRONG_AUTH_REQUIRED: String = "strong_auth_required"
+
+    /** The app's device has no signing key on this server yet (409): register it and open again. */
+    public const val DEVICE_KEY_NOT_REGISTERED: String = "device_key_not_registered"
+    public const val DEVICE_SIGNATURE_INVALID: String = "device_signature_invalid"
+
+    /** The device-key challenge expired or was used (409): open the envelope again for a new one. */
+    public const val CHALLENGE_INVALID: String = "challenge_invalid"
+    public const val SIGNATURE_NOT_ADOPTED: String = "signature_not_adopted"
+    public const val SIGNATURE_CHANGED: String = "signature_changed"
+
+    /** The final PDF is still being generated (409). */
+    public const val FILE_NOT_READY: String = "file_not_ready"
+
+    /** The signed PDF left the vault (410); the verification page still answers. */
+    public const val VAULT_EXPIRED: String = "vault_expired"
+    public const val STEP_UP_REQUIRED: String = "step_up_required"
+
     /** The @handle could not be confirmed with the global registry now (503); try again in a few minutes. */
     public const val HANDLE_REGISTRY_UNAVAILABLE: String = "handle_registry_unavailable"
 }

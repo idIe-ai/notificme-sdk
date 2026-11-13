@@ -1,0 +1,200 @@
+{
+  "description": "Serialização canônica dos envelopes (server/docs/api-envelopes.md, seção 10). canonical = bytes UTF-8 exatos; canonical_base64url = os mesmos bytes em base64url sem padding; sha256 = sha256:<hex> desses bytes. Arquivo gerado por server/internal/modules/envelopes/canon_test.go; o SDK Kotlin guarda uma cópia idêntica.",
+  "vectors": [
+    {
+      "name": "empty_object",
+      "input": {},
+      "canonical": "{}",
+      "canonical_base64url": "e30",
+      "sha256": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "key_order_bytes",
+      "input": {
+        "b": 1,
+        "a": "x",
+        "B": true,
+        "_": null,
+        "aa": [],
+        "a_b": {}
+      },
+      "canonical": "{\"B\":true,\"_\":null,\"a\":\"x\",\"a_b\":{},\"aa\":[],\"b\":1}",
+      "canonical_base64url": "eyJCIjp0cnVlLCJfIjpudWxsLCJhIjoieCIsImFfYiI6e30sImFhIjpbXSwiYiI6MX0",
+      "sha256": "sha256:e8a2b3f0fa5e156b8e1112fa4dbf048a1c2c62b34ae37b9dff09c58a05e7359e"
+    },
+    {
+      "name": "nested",
+      "input": {
+        "z": {
+          "y": [
+            3,
+            2,
+            1
+          ],
+          "x": {
+            "b": "2",
+            "a": "1"
+          }
+        },
+        "a": [
+          {
+            "k": "v"
+          },
+          [],
+          {}
+        ]
+      },
+      "canonical": "{\"a\":[{\"k\":\"v\"},[],{}],\"z\":{\"x\":{\"a\":\"1\",\"b\":\"2\"},\"y\":[3,2,1]}}",
+      "canonical_base64url": "eyJhIjpbeyJrIjoidiJ9LFtdLHt9XSwieiI6eyJ4Ijp7ImEiOiIxIiwiYiI6IjIifSwieSI6WzMsMiwxXX19",
+      "sha256": "sha256:969862acc13d659f5c03697c71c353efd60cfea3459d287f2a9e896d9ebd3095"
+    },
+    {
+      "name": "escapes_required",
+      "input": {
+        "s": "aspas \" barra \\ fim"
+      },
+      "canonical": "{\"s\":\"aspas \\\" barra \\\\ fim\"}",
+      "canonical_base64url": "eyJzIjoiYXNwYXMgXCIgYmFycmEgXFwgZmltIn0",
+      "sha256": "sha256:f473143f3bc619504aefe99e38d00fc78e1c7d8cc9af10ed597092fdbd8a9e14"
+    },
+    {
+      "name": "control_chars",
+      "input": {
+        "s": "\u0000\u0001\b\t\n\u000b\f\r\u000e\u001f fim"
+      },
+      "canonical": "{\"s\":\"\\u0000\\u0001\\b\\t\\n\\u000b\\f\\r\\u000e\\u001f fim\"}",
+      "canonical_base64url": "eyJzIjoiXHUwMDAwXHUwMDAxXGJcdFxuXHUwMDBiXGZcclx1MDAwZVx1MDAxZiBmaW0ifQ",
+      "sha256": "sha256:d335ad8a1160d5186d4b5e318a0e67bf95cf5c6893806bdcd31583fa7db88df2"
+    },
+    {
+      "name": "no_escape_html_slash",
+      "input": {
+        "s": "<b>&amp;</b> a/b"
+      },
+      "canonical": "{\"s\":\"<b>&amp;</b> a/b\"}",
+      "canonical_base64url": "eyJzIjoiPGI-JmFtcDs8L2I-IGEvYiJ9",
+      "sha256": "sha256:312cabd4a36b5f70a4e6b6f27b762c62e521013556cad28c86bf5e2aa096b122"
+    },
+    {
+      "name": "line_separators_literal",
+      "input": {
+        "s": "a\u2028b\u2029c"
+      },
+      "canonical": "{\"s\":\"a\u2028b\u2029c\"}",
+      "canonical_base64url": "eyJzIjoiYeKAqGLigKljIn0",
+      "sha256": "sha256:5b2dc062ac2d05c4b51a388dd0e99e9b161c6c6f0fefeef39629890a42902b84"
+    },
+    {
+      "name": "accents_emoji",
+      "input": {
+        "s": "ação São José — 😀 ñandú"
+      },
+      "canonical": "{\"s\":\"ação São José — 😀 ñandú\"}",
+      "canonical_base64url": "eyJzIjoiYcOnw6NvIFPDo28gSm9zw6kg4oCUIPCfmIAgw7FhbmTDuiJ9",
+      "sha256": "sha256:8ab9360fae23805e3747695dad5a1b786f1188e6e09281080d5a2b248dca6280"
+    },
+    {
+      "name": "unicode_keys_byte_order",
+      "input": {
+        "é": 1,
+        "z": 2,
+        "ü": 3,
+        "a": 4
+      },
+      "canonical": "{\"a\":4,\"z\":2,\"é\":1,\"ü\":3}",
+      "canonical_base64url": "eyJhIjo0LCJ6IjoyLCLDqSI6MSwiw7wiOjN9",
+      "sha256": "sha256:8506263fb542af72ba72e38ef686aebaf3172860b007baf5b3b820f44828274b"
+    },
+    {
+      "name": "integers",
+      "input": {
+        "zero": 0,
+        "one": 1,
+        "neg": -42,
+        "big": 9007199254740991
+      },
+      "canonical": "{\"big\":9007199254740991,\"neg\":-42,\"one\":1,\"zero\":0}",
+      "canonical_base64url": "eyJiaWciOjkwMDcxOTkyNTQ3NDA5OTEsIm5lZyI6LTQyLCJvbmUiOjEsInplcm8iOjB9",
+      "sha256": "sha256:5aa763085e94369b0e70e91b2dd5c457f464dc4228cc2917b025d92e9f1a296f"
+    },
+    {
+      "name": "whitespace_removed",
+      "input": {
+        "a": [
+          1,
+          2
+        ],
+        "b": "c"
+      },
+      "canonical": "{\"a\":[1,2],\"b\":\"c\"}",
+      "canonical_base64url": "eyJhIjpbMSwyXSwiYiI6ImMifQ",
+      "sha256": "sha256:3bb60d6e8a54ad03851105049b3dd9de8d917ea201fcdc0f54ee5899b2e44176"
+    },
+    {
+      "name": "text_not_normalized_nfd",
+      "input": {
+        "s": "Jose\u0301"
+      },
+      "canonical": "{\"s\":\"José\"}",
+      "canonical_base64url": "eyJzIjoiSm9zZcyBIn0",
+      "sha256": "sha256:fa1b795bd75618b4f3b5dcaca6e468e8ed54e4c9b37d3a7139f064ca2212737b"
+    },
+    {
+      "name": "device_payload",
+      "input": {
+        "v": 1,
+        "type": "notificme.envelope_signature",
+        "signer_id": "019a7c11-0000-7000-8000-000000000002",
+        "signed_at": "2026-11-13T17:03:11.123Z",
+        "signature_sha256": "sha256:5be1000000000000000000000000000000000000000000000000000000000000",
+        "layout_sha256": "sha256:77d0000000000000000000000000000000000000000000000000000000000000",
+        "key_id": "Zp0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "initials_sha256": "sha256:41ab000000000000000000000000000000000000000000000000000000000000",
+        "fields": [
+          {
+            "id": "019a7c22-0000-7000-8000-000000000003",
+            "value": "Acme Ltda. <filial> & cia"
+          },
+          {
+            "id": "019a7c22-0000-7000-8000-000000000004",
+            "value": ""
+          }
+        ],
+        "envelope_id": "019a7c10-0000-7000-8000-000000000001",
+        "document_sha256": "sha256:9f2c000000000000000000000000000000000000000000000000000000000000",
+        "device_id": "019a7c1e-0000-7000-8000-000000000005",
+        "consent_version": "envelope-2026-11-13",
+        "challenge": "q8Zrq8Zrq8Zrq8Zrq8Zrq8Zrq8Zrq8Zrq8Zrq8Zrq8Z",
+        "auth_method": "device_key",
+        "alg": "ES256"
+      },
+      "canonical": "{\"alg\":\"ES256\",\"auth_method\":\"device_key\",\"challenge\":\"q8Zrq8Zrq8Zrq8Zrq8Zrq8Zrq8Zrq8Zrq8Zrq8Zrq8Z\",\"consent_version\":\"envelope-2026-11-13\",\"device_id\":\"019a7c1e-0000-7000-8000-000000000005\",\"document_sha256\":\"sha256:9f2c000000000000000000000000000000000000000000000000000000000000\",\"envelope_id\":\"019a7c10-0000-7000-8000-000000000001\",\"fields\":[{\"id\":\"019a7c22-0000-7000-8000-000000000003\",\"value\":\"Acme Ltda. <filial> & cia\"},{\"id\":\"019a7c22-0000-7000-8000-000000000004\",\"value\":\"\"}],\"initials_sha256\":\"sha256:41ab000000000000000000000000000000000000000000000000000000000000\",\"key_id\":\"Zp0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"layout_sha256\":\"sha256:77d0000000000000000000000000000000000000000000000000000000000000\",\"signature_sha256\":\"sha256:5be1000000000000000000000000000000000000000000000000000000000000\",\"signed_at\":\"2026-11-13T17:03:11.123Z\",\"signer_id\":\"019a7c11-0000-7000-8000-000000000002\",\"type\":\"notificme.envelope_signature\",\"v\":1}",
+      "canonical_base64url": "eyJhbGciOiJFUzI1NiIsImF1dGhfbWV0aG9kIjoiZGV2aWNlX2tleSIsImNoYWxsZW5nZSI6InE4WnJxOFpycThacnE4WnJxOFpycThacnE4WnJxOFpycThacnE4WnJxOFoiLCJjb25zZW50X3ZlcnNpb24iOiJlbnZlbG9wZS0yMDI2LTExLTEzIiwiZGV2aWNlX2lkIjoiMDE5YTdjMWUtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDA1IiwiZG9jdW1lbnRfc2hhMjU2Ijoic2hhMjU2OjlmMmMwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAiLCJlbnZlbG9wZV9pZCI6IjAxOWE3YzEwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMSIsImZpZWxkcyI6W3siaWQiOiIwMTlhN2MyMi0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDMiLCJ2YWx1ZSI6IkFjbWUgTHRkYS4gPGZpbGlhbD4gJiBjaWEifSx7ImlkIjoiMDE5YTdjMjItMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDA0IiwidmFsdWUiOiIifV0sImluaXRpYWxzX3NoYTI1NiI6InNoYTI1Njo0MWFiMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIiwia2V5X2lkIjoiWnAwYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSIsImxheW91dF9zaGEyNTYiOiJzaGEyNTY6NzdkMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsInNpZ25hdHVyZV9zaGEyNTYiOiJzaGEyNTY6NWJlMTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCIsInNpZ25lZF9hdCI6IjIwMjYtMTEtMTNUMTc6MDM6MTEuMTIzWiIsInNpZ25lcl9pZCI6IjAxOWE3YzExLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMiIsInR5cGUiOiJub3RpZmljbWUuZW52ZWxvcGVfc2lnbmF0dXJlIiwidiI6MX0",
+      "sha256": "sha256:67a18a351c6b125f7e8d611101054ac4c1b0071095ebc8865275dbb7d1637569"
+    },
+    {
+      "name": "layout",
+      "input": {
+        "type": "notificme.envelope_layout",
+        "v": 1,
+        "envelope_id": "019a7c10-0000-7000-8000-000000000001",
+        "fields": [
+          {
+            "height": "0.060000",
+            "id": "019a7c22-0000-7000-8000-000000000003",
+            "page": 3,
+            "required": true,
+            "signer_id": "019a7c11-0000-7000-8000-000000000002",
+            "type": "signature",
+            "width": "0.300000",
+            "x": "0.120000",
+            "y": "0.780000"
+          }
+        ]
+      },
+      "canonical": "{\"envelope_id\":\"019a7c10-0000-7000-8000-000000000001\",\"fields\":[{\"height\":\"0.060000\",\"id\":\"019a7c22-0000-7000-8000-000000000003\",\"page\":3,\"required\":true,\"signer_id\":\"019a7c11-0000-7000-8000-000000000002\",\"type\":\"signature\",\"width\":\"0.300000\",\"x\":\"0.120000\",\"y\":\"0.780000\"}],\"type\":\"notificme.envelope_layout\",\"v\":1}",
+      "canonical_base64url": "eyJlbnZlbG9wZV9pZCI6IjAxOWE3YzEwLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMSIsImZpZWxkcyI6W3siaGVpZ2h0IjoiMC4wNjAwMDAiLCJpZCI6IjAxOWE3YzIyLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMyIsInBhZ2UiOjMsInJlcXVpcmVkIjp0cnVlLCJzaWduZXJfaWQiOiIwMTlhN2MxMS0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDIiLCJ0eXBlIjoic2lnbmF0dXJlIiwid2lkdGgiOiIwLjMwMDAwMCIsIngiOiIwLjEyMDAwMCIsInkiOiIwLjc4MDAwMCJ9XSwidHlwZSI6Im5vdGlmaWNtZS5lbnZlbG9wZV9sYXlvdXQiLCJ2IjoxfQ",
+      "sha256": "sha256:9f4e6fe94751a4e51e923dc0a3a20d570a2bbcc5473624665af7a6fe7b57bae6"
+    }
+  ]
+}

@@ -113,6 +113,9 @@ public class NotificClient(
     /** Face verification: enrolling the person's face in an organization and proving it is them. */
     public val face: Face = Face(this)
 
+    /** Envelopes: documents sent to the person to sign (list, open, sign, decline, download). */
+    public val envelopes: Envelopes = Envelopes(this)
+
     /** The signed-in person, their workspaces and the current sync cursor. */
     public suspend fun me(): Me = call(HttpMethod.Get, "/v0/me", Me.serializer())
 

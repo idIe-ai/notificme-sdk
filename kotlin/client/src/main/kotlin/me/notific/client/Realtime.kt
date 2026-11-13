@@ -43,6 +43,13 @@ public sealed interface RealtimeEvent {
      */
     public data object InboxChanged : RealtimeEvent
 
+    /**
+     * An envelope the person sends or signs changed (its state, document or
+     * a signer): read it again (`GET /v0/me/envelopes/{id}`) if it is on
+     * screen, and refresh the "To sign" list.
+     */
+    public data class EnvelopeChanged(val envelopeId: String) : RealtimeEvent
+
     /** The gateway rejected a message. */
     public data class ServerError(val code: String, val message: String) : RealtimeEvent
 
@@ -157,6 +164,7 @@ internal class Realtime(private val client: NotificClient) {
                     RealtimeEvent.Delivered(Wire.json.decodeFromJsonElement(Delivery.serializer(), d))
                 }
                 "inbox_changed" -> RealtimeEvent.InboxChanged
+                "envelope_changed" -> o.str("envelope_id")?.takeIf { it.isNotBlank() }?.let { RealtimeEvent.EnvelopeChanged(it) }
                 "error" -> RealtimeEvent.ServerError(o.str("code").orEmpty(), o.str("message").orEmpty())
                 else -> null
             }
