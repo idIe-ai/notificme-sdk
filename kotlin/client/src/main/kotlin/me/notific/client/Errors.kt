@@ -46,12 +46,19 @@ public class NotificMeApiException(
             FieldError(
                 path = (o["path"] as? JsonPrimitive)?.contentOrNull.orEmpty(),
                 message = (o["message"] as? JsonPrimitive)?.contentOrNull.orEmpty(),
+                reason = (o["reason"] as? JsonPrimitive)?.contentOrNull,
+                suggestion = (o["suggestion"] as? JsonPrimitive)?.contentOrNull,
             )
         }
 }
 
-/** A field the server refused: [path] is a JSON pointer (`/to/2`, `/handle`); [message] is for developers. */
-public data class FieldError(val path: String, val message: String)
+/**
+ * A field the server refused: [path] is a JSON pointer (`/to/2`, `/handle`);
+ * [message] is for developers. An e-mail refused by the recipient check
+ * (`POST /v0/email-checks`) also brings [reason] (an [EmailCheck] reason:
+ * `typo`, `no_domain`…) and, for a typo, the corrected [suggestion].
+ */
+public data class FieldError(val path: String, val message: String, val reason: String? = null, val suggestion: String? = null)
 
 /** Error codes worth a specific message or flow. Compare with [NotificMeException.code]. */
 public object ErrorCodes {

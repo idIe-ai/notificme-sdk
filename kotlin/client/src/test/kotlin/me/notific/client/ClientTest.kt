@@ -726,6 +726,32 @@ class ClientTest {
     }
 
     @Test
+    fun checkEmailsAndRefusedRecipients() = runBlocking<Unit> {
+        val requests = mutableListOf<HttpRequestData>()
+        val c = client { req ->
+            requests += req
+            when (req.url.encodedPath) {
+                "/v0/email-checks" -> json(
+                    """{"results":[{"email":"ana@gmial.com","verdict":"invalid","reason":"typo","suggestion":"ana@gmail.com"},
+                       {"email":"bia@x.com","verdict":"unknown","reason":"unverified"}]}""",
+                )
+                else -> json(
+                    """{"error":{"code":"validation_failed","message":"campos inválidos","details":{"errors":[
+                       {"path":"/to/1","message":"x","reason":"typo","suggestion":"ana@gmail.com"},{"path":"/title","message":"y"}]}}}""",
+                    HttpStatusCode.UnprocessableEntity,
+                )
+            }
+        }
+        val res = c.people.checkEmails(listOf("ana@gmial.com", "bia@x.com"))
+        assertEquals(listOf("ana@gmial.com", "bia@x.com"), requests.last().bodyJson()["emails"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertTrue(res[0].invalid)
+        assertEquals("ana@gmail.com", res[0].suggestion)
+        assertFalse(res[1].invalid)
+        val err = assertFailsWith<NotificMeApiException> { c.people.send(Compose(kind = Compose.MESSAGE, to = listOf("@ana", "ana@gmial.com"), title = "Oi", text = "x")) }
+        assertEquals(listOf(FieldError("/to/1", "x", "typo", "ana@gmail.com"), FieldError("/title", "y")), err.fieldErrors)
+    }
+
+    @Test
     fun sentShowsRecipientsByEmail() {
         val item = Wire.json.decodeFromString(SentDetail.serializer(), """
             {"id":"s1","kind":"form","recipients":[

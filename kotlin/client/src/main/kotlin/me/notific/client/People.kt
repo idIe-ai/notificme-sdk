@@ -153,6 +153,18 @@ public class People internal constructor(private val client: NotificClient) {
             )
         }
 
+    /**
+     * Whether each e-mail can receive (`POST /v0/email-checks`, up to 50; 120
+     * per minute per person): [EmailCheck.INVALID] (do not send: [EmailCheck.reason]
+     * and, for a typo, [EmailCheck.suggestion]), [EmailCheck.VALID] or
+     * [EmailCheck.UNKNOWN] (could not confirm; never blocks). Results come in
+     * the order asked.
+     */
+    public suspend fun checkEmails(emails: List<String>): List<EmailCheck> =
+        client.call(HttpMethod.Post, "/v0/email-checks", EmailChecks.serializer(), body = buildJsonObject {
+            putJsonArray("emails") { emails.forEach { add(it) } }
+        }).results
+
     /** What the person sent, newest first. */
     public suspend fun sent(cursor: String? = null, limit: Int = 50): SentPage =
         client.call(HttpMethod.Get, "/v0/me/sent", SentPage.serializer(), query = mapOf("cursor" to cursor, "limit" to limit))
@@ -188,6 +200,35 @@ public class People internal constructor(private val client: NotificClient) {
 
     @Serializable
     private data class ComposeRecipient(val person: Person)
+
+    @Serializable
+    private data class EmailChecks(val results: List<EmailCheck> = emptyList())
+}
+
+/** One result of [People.checkEmails]. */
+@Serializable
+public data class EmailCheck(
+    val email: String,
+    /** [VALID], [INVALID] or [UNKNOWN]. */
+    val verdict: String,
+    /**
+     * Invalid: `syntax`, `no_domain`, `null_mx`, `no_mx`, `disposable`,
+     * `typo`, `no_reply`, `suppressed` or `mailbox_missing`. Otherwise
+     * `history`, `accepted`, `unverified`, `catch_all`, `dns_error`,
+     * `probe_failed` or `pending`.
+     */
+    val reason: String = "",
+    /** Typo: the corrected address. */
+    val suggestion: String? = null,
+) {
+    /** Do not send to this address. */
+    val invalid: Boolean get() = verdict == INVALID
+
+    public companion object {
+        public const val VALID: String = "valid"
+        public const val INVALID: String = "invalid"
+        public const val UNKNOWN: String = "unknown"
+    }
 }
 
 /**
