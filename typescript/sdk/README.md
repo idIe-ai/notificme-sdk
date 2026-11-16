@@ -234,7 +234,7 @@ What a person token can and cannot do:
 - It answers decisions up to **level 1** inside your app; those answers are recorded with `authMethod: "delegated"`. Level 2 and above need a proof your company cannot forge (passkey, authenticator code or the notific.me app), so the API answers `403 step_up_required` with `details.level`. Level 4 (quorum) always needs the notific.me app.
 - It expires (default 1 hour, at most 12). Your app asks your backend for a new one before `expiresAt`.
 
-`issueToken()` throws `NotificMeApiError` with code `workspace_blocked` (403) when the person blocked your workspace, and `forbidden` when the service token lacks the `members:token` scope.
+`issueToken()` throws `NotificMeApiError` with code `workspace_blocked` (403) when the person blocked your workspace, `forbidden` when the service token lacks the `members:token` scope, and `member_tokens_daily_limit` (429) when a workspace on the Free plan already gained 10 new members through person tokens in the last 24 hours (`details.retry_after` says when to try again; paid plans have no cap, and people who are already members always get their token).
 
 ## Verifying webhooks
 

@@ -461,7 +461,13 @@ public class Auth internal constructor(private val client: NotificClient) {
     public suspend fun magicLink(token: String, device: DeviceInfo? = null, locale: String? = null): SignInResult =
         signIn("/v0/auth/magic", obj("token" to token, "locale" to locale, "device" to device?.let(::encodeDevice)))
 
-    /** Creates the account after [SignInResult.SignupRequired]. */
+    /**
+     * Creates the account after [SignInResult.SignupRequired]. A server that
+     * requires the Cloudflare challenge for new accounts answers
+     * [ErrorCodes.TURNSTILE_REQUIRED] (a [NotificMeApiException] whose
+     * `detail("signup_url")` is the web app's sign-in page): the account is
+     * created on the web.
+     */
     public suspend fun signUp(
         signupToken: String,
         handle: String,

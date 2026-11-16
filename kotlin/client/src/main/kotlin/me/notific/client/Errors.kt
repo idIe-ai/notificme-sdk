@@ -138,4 +138,16 @@ public object ErrorCodes {
 
     /** The @handle could not be confirmed with the global registry now (503); try again in a few minutes. */
     public const val HANDLE_REGISTRY_UNAVAILABLE: String = "handle_registry_unavailable"
+
+    /**
+     * Creating a new account needs the Cloudflare challenge (Turnstile), which
+     * only the web app shows (403 on `Auth.signUp`). Open
+     * `detail("signup_url")` (the web app's sign-in page) in the browser; the
+     * person signs up there and then signs in here. Signing in to an existing
+     * account never needs it.
+     */
+    public const val TURNSTILE_REQUIRED: String = "turnstile_required"
+
+    /** Cloudflare refused the challenge token sent with the sign-up (403); same handling as [TURNSTILE_REQUIRED]. */
+    public const val TURNSTILE_FAILED: String = "turnstile_failed"
 }
